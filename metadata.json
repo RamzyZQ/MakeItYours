@@ -1,0 +1,8 @@
+{
+  "name": "MakeitYours",
+  "description": "Studio merangkai manik interaktif estetik dengan simulasi fisika gravitasi dan palet warna pastel yang lucu.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
