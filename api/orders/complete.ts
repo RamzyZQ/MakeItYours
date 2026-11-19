@@ -1,7 +1,8 @@
-import { getBearerToken, logApiError, type ApiRequest, sendJson } from "../../server/http";
+import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { getBearerToken, logApiError, sendJson } from "../../server/http";
 import { getOrderKey, getOrderRedis, type StoredOrder } from "../../server/orderStorage";
 
-export default async function handler(request: ApiRequest, response: Parameters<typeof sendJson>[0]) {
+export default async function handler(request: VercelRequest, response: VercelResponse) {
   if (request.method !== "POST") {
     response.setHeader("Allow", "POST");
     sendJson(response, 405, { error: "Metode permintaan tidak didukung." });

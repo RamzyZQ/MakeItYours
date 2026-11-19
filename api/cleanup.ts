@@ -1,9 +1,10 @@
 import { timingSafeEqual } from "node:crypto";
 import process from "node:process";
-import { logApiError, sendJson, type ApiRequest } from "../server/http";
+import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { logApiError, sendJson } from "../server/http";
 import { getDriveClient, ORDER_TTL_SECONDS } from "../server/orderStorage";
 
-function isAuthorized(request: ApiRequest): boolean {
+function isAuthorized(request: VercelRequest): boolean {
   const secret = process.env.CRON_SECRET;
   const authorization = request.headers.authorization;
   if (!secret || typeof authorization !== "string") return false;
@@ -12,7 +13,7 @@ function isAuthorized(request: ApiRequest): boolean {
   return expected.length === actual.length && timingSafeEqual(expected, actual);
 }
 
-export default async function handler(request: ApiRequest, response: Parameters<typeof sendJson>[0]) {
+export default async function handler(request: VercelRequest, response: VercelResponse) {
   if (request.method !== "GET") {
     response.setHeader("Allow", "GET");
     sendJson(response, 405, { error: "Metode permintaan tidak didukung." });

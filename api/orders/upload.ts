@@ -1,5 +1,6 @@
 import { Readable } from "node:stream";
-import { getBearerToken, logApiError, type ApiRequest, sendJson } from "../../server/http";
+import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { getBearerToken, logApiError, sendJson } from "../../server/http";
 import {
   getDriveClient,
   getOrderKey,
@@ -10,7 +11,7 @@ import {
 const MAX_PNG_BYTES = 4_480_000;
 const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 
-async function readPng(request: ApiRequest): Promise<Buffer> {
+async function readPng(request: VercelRequest): Promise<Buffer> {
   const contentLength = Number(request.headers["content-length"] ?? 0);
   if (contentLength > MAX_PNG_BYTES) {
     throw new RangeError("Ukuran PNG melebihi batas unggahan 4,48 MB.");
@@ -41,9 +42,10 @@ async function readPng(request: ApiRequest): Promise<Buffer> {
   return image;
 }
 
+// Disable Vercel's body parser so we can read the raw PNG stream
 export const config = { api: { bodyParser: false } };
 
-export default async function handler(request: ApiRequest, response: Parameters<typeof sendJson>[0]) {
+export default async function handler(request: VercelRequest, response: VercelResponse) {
   if (request.method !== "PUT") {
     response.setHeader("Allow", "PUT");
     sendJson(response, 405, { error: "Metode permintaan tidak didukung." });
@@ -51,7 +53,10 @@ export default async function handler(request: ApiRequest, response: Parameters<
   }
 
   const token = getBearerToken(request);
-  const side = request.query?.side;
+  // Vercel parses query params automatically into req.query
+  const side = Array.isArray(request.query?.side)
+    ? request.query.side[0]
+    : request.query?.side;
   if (!token || (side !== "front" && side !== "back")) {
     sendJson(response, 400, { error: "Token unggahan atau sisi desain tidak valid." });
     return;

@@ -1,18 +1,20 @@
 import { createHash, randomBytes } from "node:crypto";
 import process from "node:process";
-import { logApiError, sendJson, type ApiRequest } from "../server/http";
+import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { logApiError, sendJson } from "../server/http";
 import { getDriveClient, getOrderKey, getOrderRedis, ORDER_TTL_SECONDS } from "../server/orderStorage";
 
 const ACCESSORY_COLORS = new Set(["pink", "hitam", "merah", "biru"]);
 const ORDER_LIMIT_PER_HOUR = 5;
 
-function getClientAddress(request: ApiRequest): string {
+function getClientAddress(request: VercelRequest): string {
   const forwardedFor = request.headers["x-forwarded-for"];
   if (typeof forwardedFor === "string") {
     const firstAddress = forwardedFor.split(",")[0]?.trim();
     if (firstAddress) return firstAddress;
   }
-  return request.socket.remoteAddress ?? "unknown";
+  // VercelRequest extends IncomingMessage, socket is available at runtime
+  return (request as unknown as { socket?: { remoteAddress?: string } }).socket?.remoteAddress ?? "unknown";
 }
 
 function getOrderDetails(body: unknown): {
@@ -40,7 +42,7 @@ function getOrderDetails(body: unknown): {
   };
 }
 
-export default async function handler(request: ApiRequest, response: Parameters<typeof sendJson>[0]) {
+export default async function handler(request: VercelRequest, response: VercelResponse) {
   if (request.method !== "POST") {
     response.setHeader("Allow", "POST");
     sendJson(response, 405, { error: "Metode permintaan tidak didukung." });

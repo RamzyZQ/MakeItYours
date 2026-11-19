@@ -1,18 +1,15 @@
-import type { IncomingMessage, ServerResponse } from "node:http";
+import type { VercelRequest, VercelResponse } from "@vercel/node";
 
-export interface ApiRequest extends IncomingMessage {
-  body?: unknown;
-  query?: Record<string, string | string[] | undefined>;
-}
+// Re-export Vercel types so API handlers can import from here
+export type ApiRequest = VercelRequest;
+export type ApiResponse = VercelResponse;
 
 export function sendJson(
-  response: ServerResponse,
+  response: VercelResponse,
   statusCode: number,
   payload: Record<string, unknown>,
 ): void {
-  response.statusCode = statusCode;
-  response.setHeader("Content-Type", "application/json; charset=utf-8");
-  response.end(JSON.stringify(payload));
+  response.status(statusCode).json(payload);
 }
 
 export function logApiError(operation: string, error: unknown): void {
@@ -22,7 +19,7 @@ export function logApiError(operation: string, error: unknown): void {
   console.error(operation, detail);
 }
 
-export function getBearerToken(request: ApiRequest): string | null {
+export function getBearerToken(request: VercelRequest): string | null {
   const header = request.headers.authorization;
   if (typeof header !== "string") return null;
   const match = /^Bearer ([A-Za-z0-9_-]{40,})$/.exec(header);
