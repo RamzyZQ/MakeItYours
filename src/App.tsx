@@ -4,6 +4,7 @@ import Home from "./pages/Home";
 import Builder from "./pages/Builder";
 import Gallery from "./pages/Gallery";
 import Keychain from "./pages/Keychain";
+import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
 import ScrollToTop from "./components/ScrollToTop";
 
@@ -16,6 +17,7 @@ export default function App() {
         <Route path="/builder/:base" element={<Builder />} />
         <Route path="/galeri" element={<Gallery />} />
         <Route path="/keychain" element={<Keychain />} />
+        <Route path="/admin" element={<Admin />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </BrowserRouter>

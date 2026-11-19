@@ -246,6 +246,57 @@ export async function renderPhotoBoothCanvas(
   });
 }
 
+function swapObjects<T>(items: T[], from: number, to: number): T[] {
+  if (
+    from === to ||
+    from < 0 ||
+    to < 0 ||
+    from >= items.length ||
+    to >= items.length
+  ) {
+    return items;
+  }
+  const next = [...items];
+  const fromItem = next[from];
+  const toItem = next[to];
+  if (fromItem === undefined || toItem === undefined) return items;
+  next[from] = toItem;
+  next[to] = fromItem;
+  return next;
+}
+
+export function moveObjectUp(document: PhotoBoothDocument, objectId: string): PhotoBoothDocument {
+  const index = document.objects.findIndex((item) => item.id === objectId);
+  if (index < 0 || index >= document.objects.length - 1) return document;
+  return { ...document, objects: swapObjects(document.objects, index, index + 1) };
+}
+
+export function moveObjectDown(document: PhotoBoothDocument, objectId: string): PhotoBoothDocument {
+  const index = document.objects.findIndex((item) => item.id === objectId);
+  if (index <= 0) return document;
+  return { ...document, objects: swapObjects(document.objects, index, index - 1) };
+}
+
+export function bringObjectToFront(document: PhotoBoothDocument, objectId: string): PhotoBoothDocument {
+  const index = document.objects.findIndex((item) => item.id === objectId);
+  if (index < 0 || index === document.objects.length - 1) return document;
+  const objects = [...document.objects];
+  const [item] = objects.splice(index, 1);
+  if (!item) return document;
+  objects.push(item);
+  return { ...document, objects };
+}
+
+export function sendObjectToBack(document: PhotoBoothDocument, objectId: string): PhotoBoothDocument {
+  const index = document.objects.findIndex((item) => item.id === objectId);
+  if (index <= 0) return document;
+  const objects = [...document.objects];
+  const [item] = objects.splice(index, 1);
+  if (!item) return document;
+  objects.unshift(item);
+  return { ...document, objects };
+}
+
 export function rotateLandscapeCanvasToPortrait(canvas: HTMLCanvasElement): HTMLCanvasElement {
   const portraitCanvas = document.createElement("canvas");
   portraitCanvas.width = canvas.height;

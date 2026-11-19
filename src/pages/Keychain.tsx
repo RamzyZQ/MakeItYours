@@ -4,6 +4,10 @@ import {
   ArrowLeft,
   Brush,
   Camera,
+  ChevronDown,
+  ChevronUp,
+  ChevronsDown,
+  ChevronsUp,
   Download,
   Eraser,
   FlipHorizontal,
@@ -35,12 +39,18 @@ import KeychainPreview from "../components/KeychainPreview";
 import { usePhotoBoothEditor } from "../hooks/usePhotoBoothEditor";
 import { usePhotoBoothCanvas } from "../hooks/usePhotoBoothCanvas";
 import {
+  bringObjectToFront,
   clampPhotoPan,
   downloadCanvasImage,
   getTemplateSide,
+  moveObjectDown,
+  moveObjectUp,
   renderPhotoBoothCanvas,
   rotateLandscapeCanvasToPortrait,
+  sendObjectToBack,
 } from "../services/photoBoothCanvas";
+import { useStoreSettings } from "../services/storeSettings";
+import { buildKeychainMessage } from "../services/whatsapp";
 import {
   DEFAULT_KEYCHAIN_ORDER,
   FRAME_MODELS,
@@ -88,6 +98,7 @@ const FONT_OPTIONS = [
   "monospace",
 ];
 const STICKER_OPTIONS = ["✨", "💖", "🌸", "🎀", "⭐", "☁️", "🦋", "🍓", "🌼", "♥"];
+const TEXT_COLOR_OPTIONS = ["#382c30", "#b83e68", "#ffffff", "#7d9bb5", "#e7b44a", "#2B2B2B"];
 
 function readImageFile(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -150,6 +161,7 @@ async function getApiError(response: Response, fallback: string): Promise<string
 }
 
 export default function Keychain() {
+  const { settings } = useStoreSettings();
   const [order, setOrder] = useState<KeychainOrder>(DEFAULT_KEYCHAIN_ORDER);
   const [template, setTemplate] = useState<PhotoBoothTemplate>(
     PHOTOBOOTH_TEMPLATES.find((item) => item.id === "8") ?? PHOTOBOOTH_TEMPLATES[0],
@@ -178,6 +190,8 @@ export default function Keychain() {
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [checkoutPreviews, setCheckoutPreviews] = useState<{ front: string; back: string } | null>(null);
   const [isPreparingCheckout, setIsPreparingCheckout] = useState(false);
+  const [toolDockCollapsed, setToolDockCollapsed] = useState(false);
+  const [focusTextInput, setFocusTextInput] = useState(false);
   const [canvasZoom, setCanvasZoom] = useState(1);
   const [canvasPan, setCanvasPan] = useState({ x: 0, y: 0 });
   const [isCanvasPanning, setIsCanvasPanning] = useState(false);
@@ -217,6 +231,7 @@ export default function Keychain() {
   const singleInputRef = useRef<HTMLInputElement>(null);
   const multipleInputRef = useRef<HTMLInputElement>(null);
   const stickerPngInputRef = useRef<HTMLInputElement>(null);
+  const textInputRef = useRef<HTMLTextAreaElement>(null);
   const liveDrawingRef = useRef<HTMLCanvasElement>(null);
   const filterDialogRef = useRef<HTMLDialogElement>(null);
   const filterSettingsButtonRef = useRef<HTMLButtonElement>(null);
@@ -266,6 +281,8 @@ export default function Keychain() {
   const frontPhotoCount = photosBySide.front.slice(0, template.photoSlots.length).filter(Boolean).length;
   const backPhotoCount = photosBySide.back.slice(0, template.backPhotoSlots.length).filter(Boolean).length;
   const selectedColor = getKeychainColor(order.frameModel);
+  const keychainStock = settings.keychainStock;
+  const allKeychainOutOfStock = FRAME_MODELS.every((frame) => keychainStock[frame.id] <= 0);
 
   const notify = (message: string, isError = false) => {
     setNotice(message);
@@ -686,6 +703,10 @@ export default function Keychain() {
 
   const openCheckout = async () => {
     if (isPreparingCheckout) return;
+    if (allKeychainOutOfStock || keychainStock[order.frameModel] <= 0) {
+      notify("Semua varian keychain sedang habis.", true);
+      return;
+    }
     if (renderError || isRendering) {
       notify("Pratinjau belum siap. Tunggu sampai gambar selesai dirender lalu coba lagi.", true);
       return;
@@ -752,6 +773,12 @@ export default function Keychain() {
   const selectEditorTool = (tool: PhotoBoothTool) => {
     if (tool !== "brush" && tool !== "eraser") clearLiveDrawing();
     if (tool !== "move") clearPhotoSelection();
+    setToolDockCollapsed(false);
+    if (tool === "text" && selectedObject?.kind === "text") {
+      setActiveTool("text");
+      setFocusTextInput(true);
+      return;
+    }
     setActiveTool(tool);
   };
   const changeActiveSide = (side: PhotoBoothSide) => {
@@ -762,6 +789,31 @@ export default function Keychain() {
   const selectedPhotoAdjustment = selectedPhotoIndex === null
     ? DEFAULT_PHOTO_ADJUSTMENT
     : currentDocument.photoAdjustments[selectedPhotoIndex] ?? DEFAULT_PHOTO_ADJUSTMENT;
+  const selectedLayerIndex = selectedObject
+    ? currentDocument.objects.findIndex((item) => item.id === selectedObject.id)
+    : -1;
+  const canMoveLayerUp = selectedLayerIndex >= 0 && selectedLayerIndex < currentDocument.objects.length - 1;
+  const canMoveLayerDown = selectedLayerIndex > 0;
+  const showToolPopover = (activeTool !== "move" && activeTool !== "hand") || Boolean(selectedObject);
+
+  useEffect(() => {
+    if (keychainStock[order.frameModel] > 0 || allKeychainOutOfStock) return;
+    const fallback = FRAME_MODELS.find((frame) => keychainStock[frame.id] > 0);
+    if (!fallback) return;
+    setOrder((current) => ({ ...current, frameModel: fallback.id }));
+    notify(`Warna ${selectedColor.label} sedang habis. Diganti ke ${fallback.label}.`);
+  }, [allKeychainOutOfStock, keychainStock, order.frameModel, selectedColor.label]);
+
+  useEffect(() => {
+    if (!focusTextInput || selectedObject?.kind !== "text") return;
+    const timer = window.setTimeout(() => {
+      const input = textInputRef.current;
+      input?.focus();
+      input?.select();
+      setFocusTextInput(false);
+    }, 50);
+    return () => window.clearTimeout(timer);
+  }, [focusTextInput, selectedObject]);
 
   useEffect(() => {
     if (selectedPhotoIndex === null) return;
@@ -958,7 +1010,74 @@ export default function Keychain() {
       selectedObjectId: object.id,
       selectedPhotoIndex: null,
     }));
+    if (object.kind === "text") {
+      setActiveTool("text");
+      setFocusTextInput(true);
+      setToolDockCollapsed(false);
+      return;
+    }
     setActiveTool("move");
+  };
+
+  const hitTestObject = (point: { x: number; y: number }) =>
+    [...currentDocument.objects].reverse().find(
+      (item) =>
+        Math.abs(point.x - item.x) <= item.width / 2 &&
+        Math.abs(point.y - item.y) <= item.height / 2,
+    );
+
+  const createTextObject = (x: number, y: number): EditorObject => ({
+    id: `text-${Date.now()}`,
+    kind: "text",
+    x,
+    y,
+    width: Math.min(sideTemplate.canvasSize.width * 0.72, 560),
+    height: textSize * 1.4,
+    rotation: 0,
+    text: textDraft.trim() || "Teks baru",
+    fontFamily: textFont,
+    fontSize: textSize,
+    color: textColor,
+  });
+
+  const addCenteredText = () => {
+    addEditorObject(createTextObject(
+      sideTemplate.canvasSize.width / 2,
+      sideTemplate.canvasSize.height / 2,
+    ));
+  };
+
+  const selectCanvasObject = (object: EditorObject) => {
+    updateDocument(activeSide, (document) => ({
+      ...document,
+      selectedObjectId: object.id,
+      selectedPhotoIndex: null,
+    }), false);
+    setToolDockCollapsed(false);
+    if (object.kind === "text") {
+      setActiveTool("text");
+      setTextDraft(object.text ?? "Teks baru");
+      setTextFont(object.fontFamily ?? FONT_OPTIONS[0]);
+      setTextColor(object.color ?? "#382c30");
+      setTextSize(object.fontSize ?? 64);
+    }
+  };
+
+  const applyObjectLayer = (
+    mutator: (document: PhotoBoothDocument, objectId: string) => PhotoBoothDocument,
+  ) => {
+    if (!selectedObject) return;
+    updateDocument(activeSide, (document) => mutator(document, selectedObject.id));
+  };
+
+  const deleteSelectedObject = () => {
+    if (!selectedObject) return;
+    updateDocument(activeSide, (document) => ({
+      ...document,
+      objects: document.objects.filter((item) => item.id !== selectedObject.id),
+      selectedObjectId: null,
+    }));
+    if (activeTool === "text") setActiveTool("move");
   };
 
   const canvasPoint = (event: React.PointerEvent<HTMLCanvasElement>) => {
@@ -1003,6 +1122,19 @@ export default function Keychain() {
     if (!brushStrokeRef.current) clearLiveDrawing();
   };
 
+  const handleCanvasDoubleClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = event.currentTarget;
+    const bounds = canvas.getBoundingClientRect();
+    const point = {
+      x: ((event.clientX - bounds.left) / bounds.width) * sideTemplate.canvasSize.width,
+      y: ((event.clientY - bounds.top) / bounds.height) * sideTemplate.canvasSize.height,
+    };
+    const hit = hitTestObject(point);
+    if (hit?.kind !== "text") return;
+    selectCanvasObject(hit);
+    setFocusTextInput(true);
+  };
+
   const handleCanvasPointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
     if (pinchStartRef.current && event.pointerType === "touch") return;
     if (activeTool === "hand") {
@@ -1019,19 +1151,12 @@ export default function Keychain() {
 
     const point = canvasPoint(event);
     if (activeTool === "text") {
-      addEditorObject({
-        id: `text-${Date.now()}`,
-        kind: "text",
-        x: point.x,
-        y: point.y,
-        width: Math.min(sideTemplate.canvasSize.width * 0.72, 560),
-        height: textSize * 1.4,
-        rotation: 0,
-        text: textDraft.trim() || "Teks baru",
-        fontFamily: textFont,
-        fontSize: textSize,
-        color: textColor,
-      });
+      const existing = hitTestObject(point);
+      if (existing) {
+        selectCanvasObject(existing);
+        return;
+      }
+      addEditorObject(createTextObject(point.x, point.y));
       return;
     }
 
@@ -1062,11 +1187,7 @@ export default function Keychain() {
       return;
     }
 
-    const hit = [...currentDocument.objects].reverse().find(
-      (item) =>
-        Math.abs(point.x - item.x) <= item.width / 2 &&
-        Math.abs(point.y - item.y) <= item.height / 2,
-    );
+    const hit = hitTestObject(point);
     if (!hit) {
       const photoIndex = currentSlots.findIndex((slot, index) =>
         Boolean(sidePhotos[index]) &&
@@ -1096,11 +1217,7 @@ export default function Keychain() {
 
     const resizeHandle = Math.abs(point.x - (hit.x + hit.width / 2)) < 24 &&
       Math.abs(point.y - (hit.y + hit.height / 2)) < 24;
-    updateDocument(activeSide, (document) => ({
-      ...document,
-      selectedObjectId: hit.id,
-      selectedPhotoIndex: null,
-    }), false);
+    selectCanvasObject(hit);
     dragRef.current = {
       side: activeSide,
       objectId: hit.id,
@@ -1268,6 +1385,49 @@ export default function Keychain() {
     }
   };
 
+  const layerControls = selectedObject && (
+    <div className="booth-layer-actions" role="group" aria-label="Urutan layer objek">
+      <button
+        type="button"
+        title="Pindah ke Depan / Atas"
+        aria-label="Pindah ke depan"
+        disabled={!canMoveLayerUp}
+        onClick={() => applyObjectLayer(moveObjectUp)}
+      >
+        <ChevronUp className="h-4 w-4" />
+      </button>
+      <button
+        type="button"
+        title="Pindah ke Belakang / Bawah"
+        aria-label="Pindah ke belakang"
+        disabled={!canMoveLayerDown}
+        onClick={() => applyObjectLayer(moveObjectDown)}
+      >
+        <ChevronDown className="h-4 w-4" />
+      </button>
+      <button
+        type="button"
+        title="Paling depan"
+        aria-label="Bawa ke paling depan"
+        disabled={!canMoveLayerUp}
+        onClick={() => applyObjectLayer(bringObjectToFront)}
+      >
+        <ChevronsUp className="h-4 w-4" />
+      </button>
+      <button
+        type="button"
+        title="Paling belakang"
+        aria-label="Kirim ke paling belakang"
+        disabled={!canMoveLayerDown}
+        onClick={() => applyObjectLayer(sendObjectToBack)}
+      >
+        <ChevronsDown className="h-4 w-4" />
+      </button>
+    </div>
+  );
+
+  const selectedText = selectedObject?.kind === "text" ? selectedObject : null;
+
   const toolSettings = (
     <>
       {(activeTool === "brush" || activeTool === "eraser") && (
@@ -1310,30 +1470,50 @@ export default function Keychain() {
         </div>
       )}
 
-      {activeTool === "text" && (
+      {activeTool === "text" && !selectedText && (
         <div className="booth-editor-settings">
+          <button type="button" className="booth-primary-action w-full" onClick={addCenteredText}>
+            <Type className="h-4 w-4" />
+            Tambah Teks
+          </button>
+          <p className="booth-muted text-xs">Atau ketuk di kanvas untuk menempatkan teks.</p>
           <label className="booth-editor-field">
             Tulisan
             <textarea
               rows={2}
               maxLength={60}
-              value={selectedObject?.kind === "text" ? selectedObject.text : textDraft}
-              onChange={(event) => {
-                const value = event.target.value;
-                if (selectedObject?.kind === "text") updateSelectedObject({ text: value });
-                else setTextDraft(value);
-              }}
+              value={textDraft}
+              onChange={(event) => setTextDraft(event.target.value)}
+            />
+          </label>
+        </div>
+      )}
+
+      {selectedText && (
+        <div className="booth-editor-settings">
+          <div className="booth-editor-row">
+            <strong>Edit teks</strong>
+            <button type="button" onClick={deleteSelectedObject}>
+              <Trash2 className="h-4 w-4" />
+              Hapus
+            </button>
+          </div>
+          <label className="booth-editor-field">
+            Tulisan
+            <textarea
+              ref={textInputRef}
+              rows={2}
+              maxLength={60}
+              value={selectedText.text ?? ""}
+              onChange={(event) => updateSelectedObject({ text: event.target.value })}
             />
           </label>
           <div className="grid grid-cols-2 gap-2">
             <label className="booth-editor-field">
               Font
               <select
-                value={selectedObject?.kind === "text" ? selectedObject.fontFamily : textFont}
-                onChange={(event) => {
-                  if (selectedObject?.kind === "text") updateSelectedObject({ fontFamily: event.target.value });
-                  else setTextFont(event.target.value);
-                }}
+                value={selectedText.fontFamily ?? FONT_OPTIONS[0]}
+                onChange={(event) => updateSelectedObject({ fontFamily: event.target.value })}
               >
                 {FONT_OPTIONS.map((font) => <option key={font} value={font}>{font}</option>)}
               </select>
@@ -1342,27 +1522,45 @@ export default function Keychain() {
               Warna
               <input
                 type="color"
-                value={selectedObject?.kind === "text" ? selectedObject.color : textColor}
-                onChange={(event) => {
-                  if (selectedObject?.kind === "text") updateSelectedObject({ color: event.target.value });
-                  else setTextColor(event.target.value);
-                }}
+                value={selectedText.color ?? "#382c30"}
+                onChange={(event) => updateSelectedObject({ color: event.target.value })}
               />
             </label>
           </div>
+          <div className="booth-editor-swatches">
+            {TEXT_COLOR_OPTIONS.map((color) => (
+              <button
+                key={color}
+                type="button"
+                aria-label={`Pilih warna teks ${color}`}
+                aria-pressed={selectedText.color === color}
+                onClick={() => updateSelectedObject({ color })}
+                style={{ backgroundColor: color }}
+              />
+            ))}
+          </div>
           <label className="booth-editor-range">
-            Ukuran teks {selectedObject?.kind === "text" ? selectedObject.fontSize : textSize}px
+            Ukuran teks {selectedText.fontSize ?? textSize}px
             <input
               type="range"
               min="24"
               max="160"
-              value={selectedObject?.kind === "text" ? selectedObject.fontSize : textSize}
+              value={selectedText.fontSize ?? textSize}
               onChange={(event) => {
                 const fontSize = Number(event.target.value);
-                if (selectedObject?.kind === "text") {
-                  updateSelectedObject({ fontSize, height: fontSize * 1.4 });
-                } else setTextSize(fontSize);
+                updateSelectedObject({ fontSize, height: fontSize * 1.4 });
               }}
+            />
+          </label>
+          {layerControls}
+          <label className="booth-editor-range">
+            Putar {selectedText.rotation}°
+            <input
+              type="range"
+              min="-180"
+              max="180"
+              value={selectedText.rotation}
+              onChange={(event) => updateSelectedObject({ rotation: Number(event.target.value) })}
             />
           </label>
         </div>
@@ -1406,22 +1604,16 @@ export default function Keychain() {
         </div>
       )}
 
-      {selectedObject && (
+      {selectedObject && selectedObject.kind !== "text" && (
         <div className="booth-editor-settings">
           <div className="booth-editor-row">
-            <strong>{selectedObject.kind === "text" ? "Atur teks" : "Atur objek"}</strong>
-            <button
-              type="button"
-              onClick={() => updateDocument(activeSide, (document) => ({
-                ...document,
-                objects: document.objects.filter((item) => item.id !== selectedObject.id),
-                selectedObjectId: null,
-              }))}
-            >
+            <strong>Atur objek</strong>
+            <button type="button" onClick={deleteSelectedObject}>
               <Trash2 className="h-4 w-4" />
-              Hapus objek
+              Hapus
             </button>
           </div>
+          {layerControls}
           <label className="booth-editor-range">
             Putar objek {selectedObject.rotation}°
             <input
@@ -1454,7 +1646,7 @@ export default function Keychain() {
         </div>
       )}
 
-      <main className="mx-auto flex w-full max-w-[1480px] flex-1 flex-col px-3 pb-28 pt-3 sm:px-5 sm:pt-4 lg:pb-6 xl:px-7">
+      <main className="mx-auto flex w-full max-w-[1480px] flex-1 flex-col px-3 pb-6 pt-3 sm:px-5 sm:pt-4 lg:pb-6 xl:px-7">
         <header className="mb-4 flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-3">
             <Link
@@ -1516,66 +1708,6 @@ export default function Keychain() {
             </div>
 
             <div className="booth-canvas-workspace">
-              <div className="booth-editor-rail" role="toolbar" aria-label="Alat edit foto">
-                {([
-                  ["hand", "Hand", Hand],
-                  ["move", "Move", Move],
-                  ["brush", "Brush", Brush],
-                  ["eraser", "Penghapus", Eraser],
-                  ["text", "Teks", Type],
-                  ["sticker", "Stiker", Sticker],
-                ] as const).map(([tool, label, Icon]) => (
-                  <button
-                    key={tool}
-                    type="button"
-                    aria-label={label}
-                    aria-pressed={activeTool === tool}
-                    onClick={() => selectEditorTool(tool)}
-                    className="booth-editor-tool"
-                    title={label}
-                  >
-                    <Icon className="h-5 w-5" />
-                  </button>
-                ))}
-                <span className="booth-rail-divider" aria-hidden="true" />
-                <button
-                  type="button"
-                  title="Urungkan perubahan"
-                  aria-label="Urungkan perubahan"
-                  disabled={!history[activeSide].past.length}
-                  onClick={() => undo(activeSide)}
-                  className="booth-editor-tool disabled:opacity-40"
-                >
-                  <Undo2 className="h-5 w-5" />
-                </button>
-                <button
-                  type="button"
-                  title="Ulangi perubahan"
-                  aria-label="Ulangi perubahan"
-                  disabled={!history[activeSide].future.length}
-                  onClick={() => redo(activeSide)}
-                  className="booth-editor-tool disabled:opacity-40"
-                >
-                  <Redo2 className="h-5 w-5" />
-                </button>
-              </div>
-
-              {((activeTool !== "move" && activeTool !== "hand") || selectedObject) && (
-                <aside className="booth-tool-popover" aria-label="Pengaturan alat aktif">
-                  <h3 className="booth-tool-popover-title">
-                    {activeTool === "move" ? "Objek terpilih" : {
-                      hand: "Hand",
-                      move: "Move",
-                      brush: "Brush",
-                      eraser: "Penghapus",
-                      text: "Teks",
-                      sticker: "Stiker",
-                    }[activeTool]}
-                  </h3>
-                  {toolSettings}
-                </aside>
-              )}
-
             <div
               className="booth-stage flex flex-1 flex-col overflow-hidden rounded-2xl p-3 sm:p-4"
             >
@@ -1598,6 +1730,7 @@ export default function Keychain() {
                   onPointerUp={activeSide === "front" ? handleCanvasPointerUp : undefined}
                   onPointerCancel={activeSide === "front" ? handleCanvasPointerUp : undefined}
                   onPointerLeave={activeSide === "front" ? handleCanvasPointerLeave : undefined}
+                  onDoubleClick={activeSide === "front" ? handleCanvasDoubleClick : undefined}
                 />
                 <canvas
                   ref={backRender.canvasRef}
@@ -1608,6 +1741,7 @@ export default function Keychain() {
                   onPointerUp={activeSide === "back" ? handleCanvasPointerUp : undefined}
                   onPointerCancel={activeSide === "back" ? handleCanvasPointerUp : undefined}
                   onPointerLeave={activeSide === "back" ? handleCanvasPointerLeave : undefined}
+                  onDoubleClick={activeSide === "back" ? handleCanvasDoubleClick : undefined}
                 />
                 <canvas ref={liveDrawingRef} className="booth-live-drawing" aria-hidden="true" />
                 {currentSlots.map((slot, index) => {
@@ -1758,6 +1892,89 @@ export default function Keychain() {
                 </span>
               </div>
             </div>
+              <div className={`booth-tool-dock${toolDockCollapsed ? " is-collapsed" : ""}`}>
+                <div className="booth-editor-rail" role="toolbar" aria-label="Alat edit foto">
+                  {([
+                    ["hand", "Hand", Hand],
+                    ["move", "Move", Move],
+                    ["brush", "Brush", Brush],
+                    ["eraser", "Penghapus", Eraser],
+                    ["text", "Teks", Type],
+                    ["sticker", "Stiker", Sticker],
+                  ] as const).map(([tool, label, Icon]) => (
+                    <button
+                      key={tool}
+                      type="button"
+                      aria-label={label}
+                      aria-pressed={activeTool === tool}
+                      onClick={() => selectEditorTool(tool)}
+                      className="booth-editor-tool"
+                      title={label}
+                    >
+                      <Icon className="h-5 w-5" />
+                    </button>
+                  ))}
+                  <span className="booth-rail-divider" aria-hidden="true" />
+                  <button
+                    type="button"
+                    title="Urungkan perubahan"
+                    aria-label="Urungkan perubahan"
+                    disabled={!history[activeSide].past.length}
+                    onClick={() => undo(activeSide)}
+                    className="booth-editor-tool disabled:opacity-40"
+                  >
+                    <Undo2 className="h-5 w-5" />
+                  </button>
+                  <button
+                    type="button"
+                    title="Ulangi perubahan"
+                    aria-label="Ulangi perubahan"
+                    disabled={!history[activeSide].future.length}
+                    onClick={() => redo(activeSide)}
+                    className="booth-editor-tool disabled:opacity-40"
+                  >
+                    <Redo2 className="h-5 w-5" />
+                  </button>
+                </div>
+
+                {showToolPopover && !toolDockCollapsed && (
+                  <aside className="booth-tool-popover" aria-label="Pengaturan alat aktif">
+                    <div className="booth-tool-popover-header">
+                      <h3 className="booth-tool-popover-title">
+                        {selectedText ? "Edit teks" : activeTool === "move" ? "Objek terpilih" : {
+                          hand: "Hand",
+                          move: "Move",
+                          brush: "Brush",
+                          eraser: "Penghapus",
+                          text: "Teks",
+                          sticker: "Stiker",
+                        }[activeTool]}
+                      </h3>
+                      <button
+                        type="button"
+                        className="booth-tool-dock-toggle"
+                        aria-label="Sembunyikan panel alat"
+                        title="Sembunyikan panel alat"
+                        onClick={() => setToolDockCollapsed(true)}
+                      >
+                        <ChevronDown className="h-4 w-4" />
+                      </button>
+                    </div>
+                    {toolSettings}
+                  </aside>
+                )}
+                {showToolPopover && toolDockCollapsed && (
+                  <button
+                    type="button"
+                    className="booth-tool-dock-toggle is-expand"
+                    aria-label="Tampilkan panel alat"
+                    onClick={() => setToolDockCollapsed(false)}
+                  >
+                    <ChevronUp className="h-4 w-4" />
+                    Buka pengaturan
+                  </button>
+                )}
+              </div>
             </div>
             {renderError && (
               <p className="mt-2 rounded-xl bg-red-50 px-3 py-2 text-xs font-semibold text-red-700" role="alert">
@@ -2010,19 +2227,37 @@ export default function Keychain() {
                 </div>
                 <span className="booth-muted text-xs">{selectedColor.label}</span>
               </div>
+              {allKeychainOutOfStock && (
+                <p className="mb-2 rounded-xl bg-[#FFF1F2] px-3 py-2 text-xs font-bold text-[#BE123C]" role="alert">
+                  Semua varian keychain sedang habis
+                </p>
+              )}
               <div className="grid grid-cols-4 gap-2">
-                {FRAME_MODELS.map((frame) => (
-                  <button
-                    key={frame.id}
-                    type="button"
-                    aria-pressed={order.frameModel === frame.id}
-                    onClick={() => setOrder((current) => ({ ...current, frameModel: frame.id }))}
-                    className={`booth-color-option ${order.frameModel === frame.id ? "is-selected" : ""}`}
-                  >
-                    <span style={{ backgroundColor: frame.color.hex, borderColor: frame.color.hexDark }} />
-                    {frame.label}
-                  </button>
-                ))}
+                {FRAME_MODELS.map((frame) => {
+                  const stock = keychainStock[frame.id];
+                  const soldOut = stock <= 0;
+                  return (
+                    <button
+                      key={frame.id}
+                      type="button"
+                      disabled={soldOut}
+                      aria-pressed={order.frameModel === frame.id}
+                      onClick={() => {
+                        if (soldOut) return;
+                        setOrder((current) => ({ ...current, frameModel: frame.id }));
+                      }}
+                      className={`booth-color-option ${order.frameModel === frame.id ? "is-selected" : ""} ${soldOut ? "is-soldout" : ""}`}
+                    >
+                      <span style={{ backgroundColor: frame.color.hex, borderColor: frame.color.hexDark }} />
+                      <span className="booth-color-option-copy">
+                        {frame.label}
+                        <small className={`booth-stock-badge${soldOut ? " is-empty" : ""}`}>
+                          {soldOut ? "Habis" : `Sisa ${stock}`}
+                        </small>
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
               <div className="booth-order-actions">
                 <button
@@ -2050,12 +2285,20 @@ export default function Keychain() {
                 <button
                   type="button"
                   aria-label="Pesan dan lanjutkan ke WhatsApp"
-                  onClick={() => void openCheckout()}
-                  disabled={isCheckoutBusy}
+                  onClick={() => {
+                    if (allKeychainOutOfStock) {
+                      notify("Semua varian keychain sedang habis.", true);
+                      return;
+                    }
+                    void openCheckout();
+                  }}
+                  disabled={isCheckoutBusy || allKeychainOutOfStock}
                   className="booth-primary-action"
                 >
                   <MessageCircle className="h-4 w-4" />
-                  {isRendering ? "Memperbarui…" : isPreparingCheckout ? "Menyiapkan…" : "Pesan"}
+                  {allKeychainOutOfStock
+                    ? "Stok habis"
+                    : isRendering ? "Memperbarui…" : isPreparingCheckout ? "Menyiapkan…" : "Pesan"}
                 </button>
               </div>
             </section>
@@ -2125,7 +2368,12 @@ export default function Keychain() {
         summary={
           <>
             <p>Template photobooth: {template.name}</p>
-            <p>Warna set aksesori: {selectedColor.label}</p>
+            <p>
+              Warna set aksesori: {selectedColor.label}
+              {allKeychainOutOfStock
+                ? " · stok habis"
+                : ` · sisa ${keychainStock[order.frameModel]}`}
+            </p>
             <p>Sisi depan · {frontPhotoCount}/{template.photoSlots.length} foto</p>
             <p>Sisi belakang · {backPhotoCount}/{template.backPhotoSlots.length} foto</p>
           </>
@@ -2133,7 +2381,16 @@ export default function Keychain() {
         showCustomerFields={false}
         submitLabel="Pesan & lanjut WhatsApp"
         compactPreviewOnly
-        buildMessage={() => checkoutCodeRef.current}
+        buildMessage={(customerName, note) => {
+          const orderWithCustomer: KeychainOrder = {
+            ...currentOrder,
+            customerName: customerName || order.customerName,
+            note: note || order.note,
+          };
+          const baseMsg = buildKeychainMessage(orderWithCustomer, keychainStock[order.frameModel]);
+          const code = checkoutCodeRef.current;
+          return code ? `${baseMsg}\n\n*Kode Desain:* ${code}` : baseMsg;
+        }}
         onBeforeSend={onBeforeCheckoutSend}
         onClose={closeCheckout}
       />

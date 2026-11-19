@@ -31,7 +31,13 @@ import {
   X,
   Info,
   MessageCircle,
+  Sparkles,
 } from "lucide-react";
+import {
+  isStudioOpen,
+  studioStatusLabel,
+  useStoreSettings,
+} from "../services/storeSettings";
 
 export default function Builder() {
   const { base } = useParams<{ base: string }>();
@@ -66,6 +72,8 @@ function BuilderInner({
   setDesignParam: (id: string | null) => void;
   navigate: ReturnType<typeof useNavigate>;
 }) {
+  const { settings } = useStoreSettings();
+  const studio = settings.studios[base];
   const path = getPath(base);
   const sim = useStringSim(path);
 
@@ -231,6 +239,38 @@ function BuilderInner({
   };
 
   const count = sim.beads.length;
+
+  if (!isStudioOpen(studio.status)) {
+    return (
+      <div className="flex min-h-screen flex-col bg-pastel-mesh">
+        <AppHeader />
+        <main className="mx-auto flex w-full max-w-2xl flex-1 items-center px-4 py-10">
+          <div className="w-full rounded-[2rem] border-2 border-[#FCE7F3] bg-white p-8 text-center shadow-xl">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-3xl bg-[#FDF2F8] text-[#DB2777]">
+              <Sparkles className="h-8 w-8 animate-pulse" />
+            </div>
+            <p className="meta-label text-[#DB2777]">{studioStatusLabel(studio.status)}</p>
+            <h1 className="mt-2 font-display text-3xl font-extrabold text-[#372A3C]">
+              Studio {BASE_TYPE_LABELS[base]} Segera Hadir!
+            </h1>
+            <p className="mx-auto mt-3 max-w-[42ch] text-sm leading-relaxed text-[#6B5E70]">
+              {studio.note?.trim() ||
+                "Kami masih merapikan studio pastel ini. Keychain custom sudah bisa dipakai, dan studio manik akan menyusul!"}
+            </p>
+            <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+              <Link to="/" className="btn-pastel-secondary">
+                <ArrowLeft className="h-4 w-4" />
+                Kembali ke Beranda
+              </Link>
+              <Link to="/keychain" className="btn-pastel-primary">
+                Buka Studio Keychain
+              </Link>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   const MAT_OPTIONS: { id: CanvasMatTone; label: string; color: string }[] = [
     { id: "pastel-pink", label: "Pink", color: "bg-[#FCE7F3]" },

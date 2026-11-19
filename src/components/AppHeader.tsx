@@ -3,6 +3,7 @@ import { Link, NavLink } from "react-router-dom";
 import { Heart, Palette, Volume2, VolumeX, Menu, X, KeyRound } from "lucide-react";
 import { getUserProfile, setUserProfile, type UserProfile } from "../services/storage";
 import { chime } from "../game/sim";
+import { getFirstOpenStudio, useStoreSettings } from "../services/storeSettings";
 
 export default function AppHeader() {
   const [profile, setProfile] = useState<UserProfile>(getUserProfile());
@@ -12,6 +13,8 @@ export default function AppHeader() {
   const [newName, setNewName] = useState(profile.name);
   const [newAvatar, setNewAvatar] = useState(profile.avatar);
 
+  const { settings, error: settingsError } = useStoreSettings();
+  const studioPath = `/builder/${getFirstOpenStudio(settings) ?? "kalung"}`;
   const AVATAR_OPTIONS = ["🌸", "✨", "🎀", "💖", "🍓", "🧁", "🌼", "🍡", "🧸", "🦄"];
 
   const handleSaveProfile = (e: React.FormEvent) => {
@@ -31,6 +34,14 @@ export default function AppHeader() {
 
   return (
     <>
+      {settingsError && (
+        <div
+          className="bg-red-50 px-4 py-2 text-center text-xs font-semibold text-red-700"
+          role="alert"
+        >
+          Pengaturan toko belum dapat dimuat. Sebagian status dan stok mungkin belum terbaru.
+        </div>
+      )}
       <header className="sticky top-0 z-40 border-b border-[#FCE7F3] bg-[#FFF8FA]/90 backdrop-blur-md transition-all">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
           {/* Brand Logo */}
@@ -66,7 +77,7 @@ export default function AppHeader() {
               <span>Beranda</span>
             </NavLink>
             <NavLink
-              to="/builder/kalung"
+              to={studioPath}
               className={({ isActive }) =>
                 `flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-bold transition-all ${
                   isActive
@@ -154,7 +165,7 @@ export default function AppHeader() {
               <span>Beranda</span>
             </Link>
             <Link
-              to="/builder/kalung"
+              to={studioPath}
               onClick={() => setMobileMenuOpen(false)}
               className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold text-[#523B54] hover:bg-[#FDF2F8] hover:text-[#DB2777]"
             >

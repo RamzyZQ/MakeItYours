@@ -513,11 +513,23 @@
   flex: 1;
 }
 
-.booth-editor-rail {
+.booth-tool-dock {
   position: absolute;
   z-index: 7;
   top: 10px;
   left: 10px;
+  display: flex;
+  max-height: calc(100% - 20px);
+  align-items: flex-start;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.booth-tool-dock > * {
+  pointer-events: auto;
+}
+
+.booth-editor-rail {
   display: flex;
   width: 56px;
   flex-direction: column;
@@ -531,10 +543,6 @@
 }
 
 .booth-tool-popover {
-  position: absolute;
-  z-index: 6;
-  top: 10px;
-  left: 76px;
   display: grid;
   width: 224px;
   max-height: calc(100% - 20px);
@@ -547,10 +555,80 @@
   box-shadow: 0 12px 30px rgb(52 32 40 / 14%);
 }
 
+.booth-tool-popover-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .booth-tool-popover-title {
   color: var(--booth-ink);
   font-size: 12px;
   font-weight: 800;
+}
+
+.booth-tool-dock-toggle {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid var(--booth-border);
+  border-radius: 999px;
+  background: var(--booth-surface);
+  padding: 0 12px;
+  color: var(--booth-muted);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 140ms ease;
+  user-select: none;
+}
+
+.booth-tool-dock-toggle:hover {
+  border-color: var(--booth-accent);
+  color: var(--booth-accent);
+  background: var(--booth-accent-soft);
+}
+
+.booth-tool-dock-toggle.is-expand {
+  align-self: center;
+  margin-top: 4px;
+  box-shadow: 0 4px 12px rgb(52 32 40 / 12%);
+  border-color: var(--booth-accent);
+  color: var(--booth-accent);
+  background: var(--booth-surface);
+}
+
+.booth-layer-actions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.booth-layer-actions button {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--booth-border);
+  border-radius: 12px;
+  background: white;
+  color: var(--booth-ink);
+  cursor: pointer;
+  transition: all 140ms ease;
+}
+
+.booth-layer-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
+}
+
+.booth-layer-actions button:hover:not(:disabled) {
+  border-color: var(--booth-accent);
+  background: var(--booth-accent-soft);
+  color: var(--booth-accent);
 }
 
 .booth-rail-divider {
@@ -1075,10 +1153,11 @@
 
 .booth-color-option {
   display: flex;
-  min-height: 46px;
+  min-height: 62px;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 4px;
   border: 1px solid var(--booth-border);
   border-radius: 12px;
   background: var(--booth-surface);
@@ -1087,7 +1166,7 @@
   font-weight: 700;
 }
 
-.booth-color-option span {
+.booth-color-option > span:first-child {
   width: 17px;
   height: 17px;
   flex: 0 0 auto;
@@ -1095,10 +1174,35 @@
   border-radius: 50%;
 }
 
+.booth-color-option-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.15;
+}
+
+.booth-stock-badge {
+  margin-top: 2px;
+  color: var(--booth-accent);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.booth-stock-badge.is-empty {
+  color: #be123c;
+}
+
 .booth-color-option.is-selected {
   border-color: var(--booth-accent);
   background: var(--booth-accent-soft);
   color: var(--booth-accent);
+}
+
+.booth-color-option.is-soldout {
+  cursor: not-allowed;
+  filter: grayscale(0.75);
+  opacity: 0.62;
+  text-decoration: line-through;
 }
 
 .booth-product-preview {
@@ -1336,29 +1440,45 @@
 
 @media (max-width: 639px) {
   .booth-canvas-workspace {
-    min-height: 320px;
+    min-height: 0;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .booth-stage {
+    min-height: 280px;
+    padding: 12px 8px 8px;
+  }
+
+  .booth-canvas-wrap {
+    max-height: min(52svh, 480px);
+  }
+
+  .booth-tool-dock {
+    position: relative;
+    top: auto;
+    left: auto;
+    width: 100%;
+    max-height: none;
+    flex-direction: column;
+    align-items: stretch;
+    padding: 4px 0 max(4px, env(safe-area-inset-bottom));
   }
 
   .booth-editor-rail {
-    top: 8px;
-    left: 50%;
-    width: max-content;
-    max-width: calc(100% - 16px);
+    width: 100%;
+    max-width: 100%;
     flex-direction: row;
     gap: 8px;
     overflow-x: auto;
     padding: 4px;
     border-radius: 17px;
-    transform: translateX(-50%);
   }
 
   .booth-tool-popover {
-    top: 64px;
-    left: 50%;
-    width: min(356px, calc(100vw - 24px));
-    max-height: min(38svh, 260px);
+    width: 100%;
+    max-height: min(42svh, 320px);
     padding: 10px;
-    transform: translateX(-50%);
   }
 
   .booth-rail-divider {

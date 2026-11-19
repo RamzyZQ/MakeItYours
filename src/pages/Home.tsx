@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import AppHeader from "../components/AppHeader";
 import StringCanvas from "../components/StringCanvas";
@@ -6,7 +6,13 @@ import { getPath, topS } from "../game/paths";
 import { BEADS } from "../game/beads";
 import { useStringSim } from "../game/sim";
 import { BASE_TYPE_LABELS, BASE_TYPE_DESCRIPTIONS, type BaseType } from "../types/beads";
-import { ArrowRight, Sparkles, Heart, MousePointer2, MoveDown, Layers, Download, Palette, RefreshCw } from "lucide-react";
+import { ArrowRight, Sparkles, Heart, MousePointer2, MoveDown, Layers, Download, Palette, RefreshCw, Lock } from "lucide-react";
+import {
+  isStudioOpen,
+  studioStatusLabel,
+  useStoreSettings,
+  type StudioId,
+} from "../services/storeSettings";
 
 const BASE_CARDS: ({ base: BaseType; icon: string } | { base: "keychain"; icon: string })[] = [
   { base: "kalung", icon: "✨" },
@@ -72,10 +78,26 @@ function HeroDemo() {
 
 export default function Home() {
   const navigate = useNavigate();
+  const { settings } = useStoreSettings();
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const notify = (message: string) => {
+    setNotice(message);
+    window.setTimeout(() => {
+      setNotice((current) => (current === message ? null : current));
+    }, 2800);
+  };
 
   return (
     <div className="min-h-screen bg-pastel-mesh flex flex-col">
       <AppHeader />
+      {notice && (
+        <div className="fixed top-20 left-1/2 z-50 -translate-x-1/2 px-4" role="status">
+          <div className="rounded-full border-2 border-[#FBCFE8] bg-white px-5 py-2 text-center text-xs font-bold text-[#DB2777] shadow-lg">
+            {notice}
+          </div>
+        </div>
+      )}
 
       {/* ---- Hero Section ---- */}
       <section className="mx-auto max-w-6xl w-full px-4 pt-8 pb-14 sm:px-6 lg:pt-14 lg:pb-20">
@@ -164,13 +186,27 @@ export default function Home() {
               const desc = isKeychain
                 ? "Gantungan praktis — pas untuk foto strip, kunci, dan tas favoritmu"
                 : BASE_TYPE_DESCRIPTIONS[base];
+              const studio = isKeychain ? null : settings.studios[base as StudioId];
+              const studioLocked = Boolean(studio && !isStudioOpen(studio.status));
 
               return (
                 <button
                   key={base}
                   type="button"
-                  onClick={() => navigate(isKeychain ? "/keychain" : `/builder/${base}`)}
-                  className="group relative flex flex-col rounded-3xl border-2 border-[#FCE7F3] bg-white p-6 text-left shadow-sm transition-all duration-300 hover:border-[#F472B6] hover:shadow-xl hover:-translate-y-1.5"
+                  onClick={() => {
+                    if (studioLocked && studio) {
+                      notify(
+                        studio.note?.trim()
+                          ? `Studio ${label}: ${studio.note.trim()}`
+                          : `Studio ${label} sedang ${studioStatusLabel(studio.status).toLowerCase()} — pantau terus ya! 🌸`
+                      );
+                      return;
+                    }
+                    navigate(isKeychain ? "/keychain" : `/builder/${base}`);
+                  }}
+                  className={`group relative flex flex-col rounded-3xl border-2 border-[#FCE7F3] bg-white p-6 text-left shadow-sm transition-all duration-300 hover:border-[#F472B6] hover:shadow-xl hover:-translate-y-1.5 cursor-pointer ${
+                    studioLocked ? "opacity-90" : ""
+                  }`}
                 >
                   <div className="flex items-center justify-between">
                     <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-[#FFF0F5] text-lg">
@@ -180,6 +216,17 @@ export default function Home() {
                       {isKeychain && (
                         <span className="rounded-full bg-[#FDF2F8] px-2.5 py-1 text-[10px] font-extrabold text-[#DB2777]">
                           BARU
+                        </span>
+                      )}
+                      {studioLocked && studio && (
+                        <span
+                          className={`rounded-full px-2.5 py-1 text-[10px] font-extrabold border ${
+                            studio.status === "locked"
+                              ? "bg-[#FEE2E2] border-[#FECACA] text-[#DC2626]"
+                              : "bg-[#FEF3C7] border-[#FDE68A] text-[#D97706]"
+                          }`}
+                        >
+                          {studioStatusLabel(studio.status)}
                         </span>
                       )}
                       <span className="meta-label text-[#A288A6] font-bold">0{idx + 1}</span>
@@ -245,9 +292,27 @@ export default function Home() {
                     {desc}
                   </p>
 
-                  <div className="mt-auto flex items-center gap-1 pt-5 text-xs font-extrabold text-[#DB2777]">
-                    <span>Buka di Studio</span>
-                    <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1.5" />
+                  {studioLocked && studio?.note?.trim() && (
+                    <div className="mt-2 rounded-xl bg-[#FEF3C7]/60 border border-[#FDE68A] px-2.5 py-1 text-[11px] font-semibold text-[#B45309]">
+                      📌 {studio.note.trim()}
+                    </div>
+                  )}
+
+                  <div
+                    className={`mt-auto flex items-center gap-1.5 pt-5 text-xs font-extrabold ${
+                      studioLocked
+                        ? studio?.status === "locked"
+                          ? "text-[#DC2626]"
+                          : "text-[#D97706]"
+                        : "text-[#DB2777]"
+                    }`}
+                  >
+                    <span>{studioLocked ? studioStatusLabel(studio?.status ?? "coming_soon") : "Buka di Studio"}</span>
+                    {studioLocked ? (
+                      <Lock className="h-3.5 w-3.5" />
+                    ) : (
+                      <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1.5" />
+                    )}
                   </div>
                 </button>
               );

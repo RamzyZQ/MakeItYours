@@ -24,7 +24,7 @@ The checkout API stores the front and back PNGs in a dedicated Google Drive fold
 2. Create an OAuth client ID for a Web application. Set `https://developers.google.com/oauthplayground` as an authorized redirect URI, configure the OAuth consent screen, and add your Gmail account as a test user if the app is in testing.
 3. In OAuth Playground settings, enable **Use your own OAuth credentials** and enter the OAuth client ID and secret. Authorize `https://www.googleapis.com/auth/drive` with the Gmail account that owns the order folder, then exchange the authorization code for tokens. Use the resulting refresh token as `GOOGLE_REFRESH_TOKEN`. The full Drive scope is needed because the app accesses a folder configured by ID and the cleanup job deletes expired uploads.
 4. Create a dedicated order folder in that Gmail account's Drive and set `GOOGLE_DRIVE_FOLDER_ID` to its ID. The cleanup job only removes old files carrying this app's order metadata.
-5. Add these server-only environment variables in Vercel:
+5. Add these environment variables in Vercel:
    - `UPSTASH_REDIS_REST_URL`
    - `UPSTASH_REDIS_REST_TOKEN`
    - `GOOGLE_DRIVE_FOLDER_ID`
@@ -32,9 +32,14 @@ The checkout API stores the front and back PNGs in a dedicated Google Drive fold
    - `GOOGLE_CLIENT_SECRET`
    - `GOOGLE_REFRESH_TOKEN`
    - `CRON_SECRET` (a long random value used to protect the cleanup endpoint)
-   - `VITE_WHATSAPP_NUMBER`
+   - `ADMIN_PIN` (the initial admin PIN; choose a strong value)
+   - `ADMIN_SESSION_SECRET` (a random secret of at least 32 characters for admin sessions)
+   - `VITE_WHATSAPP_NUMBER` (client-visible shop contact number)
 6. Deploy to Vercel. The daily cron in [vercel.json](./vercel.json) deletes expired files from the configured folder.
 
-The Vite-only `npm run dev` server does not run Vercel API functions. Use `vercel dev` with the same environment variables to test Drive checkout locally. Never add Google credentials or Upstash tokens to a `VITE_` variable or commit them.
+Admin studio status and keychain stock are stored in Upstash through `/api/store-settings`; the admin PIN is stored as a salted hash after it is changed. Admin sessions use an HttpOnly, signed cookie. On first admin login, studio status and stock from this browser's previous local storage are imported only if Upstash has not been initialized yet. The old browser-stored PIN is not imported; use `ADMIN_PIN` as the initial server-side PIN, then change it in the dashboard if desired.
+Generate `ADMIN_SESSION_SECRET` with `node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"` and use an initial `ADMIN_PIN` of at least 8 characters.
+
+The Vite-only `npm run dev` server does not run Vercel API functions. Use `vercel dev` with the same environment variables to test Drive checkout and admin settings locally. Never add Google credentials, Upstash tokens, or admin secrets to a `VITE_` variable or commit them.
 
 If the OAuth consent screen remains in **Testing** with an External user type, Google may expire refresh tokens after seven days. For uninterrupted production use, move the app out of Testing and complete any Google verification required for the Drive scope.
