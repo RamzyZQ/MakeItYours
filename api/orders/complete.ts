@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { getBearerToken, logApiError, sendJson } from "../../server/http";
-import { getOrderKey, getOrderRedis, type StoredOrder } from "../../server/orderStorage";
+import { getBearerToken, logApiError, sendJson } from "../../server/http.js";
+import { getOrderKey, getOrderRedis, type StoredOrder } from "../../server/orderStorage.js";
 
 export default async function handler(request: VercelRequest, response: VercelResponse) {
   if (request.method !== "POST") {

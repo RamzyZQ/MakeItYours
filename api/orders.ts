@@ -1,8 +1,8 @@
 import { createHash, randomBytes } from "node:crypto";
 import process from "node:process";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { logApiError, sendJson } from "../server/http";
-import { getDriveClient, getOrderKey, getOrderRedis, ORDER_TTL_SECONDS } from "../server/orderStorage";
+import { logApiError, sendJson } from "../server/http.js";
+import { getDriveClient, getOrderKey, getOrderRedis, ORDER_TTL_SECONDS } from "../server/orderStorage.js";
 
 const ACCESSORY_COLORS = new Set(["pink", "hitam", "merah", "biru"]);
 const ORDER_LIMIT_PER_HOUR = 5;

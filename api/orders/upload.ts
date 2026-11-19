@@ -1,12 +1,12 @@
 import { Readable } from "node:stream";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { getBearerToken, logApiError, sendJson } from "../../server/http";
+import { getBearerToken, logApiError, sendJson } from "../../server/http.js";
 import {
   getDriveClient,
   getOrderKey,
   getOrderRedis,
   type StoredOrder,
-} from "../../server/orderStorage";
+} from "../../server/orderStorage.js";
 
 const MAX_PNG_BYTES = 4_480_000;
 const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);

@@ -1,8 +1,8 @@
 import { timingSafeEqual } from "node:crypto";
 import process from "node:process";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { logApiError, sendJson } from "../server/http";
-import { getDriveClient, ORDER_TTL_SECONDS } from "../server/orderStorage";
+import { logApiError, sendJson } from "../server/http.js";
+import { getDriveClient, ORDER_TTL_SECONDS } from "../server/orderStorage.js";
 
 function isAuthorized(request: VercelRequest): boolean {
   const secret = process.env.CRON_SECRET;
