@@ -1,6 +1,6 @@
 import { drive_v3 } from "@googleapis/drive";
 import { Redis } from "@upstash/redis";
-import { JWT } from "google-auth-library";
+import { OAuth2Client } from "google-auth-library";
 import process from "node:process";
 
 export const ORDER_TTL_SECONDS = 30 * 24 * 60 * 60;
@@ -32,31 +32,15 @@ export function getOrderKey(uploadToken: string): string {
 
 export function getDriveClient() {
   const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
-  const rawCredentials = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
-  if (!folderId || !rawCredentials) {
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
+  if (!folderId || !clientId || !clientSecret || !refreshToken) {
     throw new Error("Konfigurasi Google Drive belum lengkap.");
   }
 
-  let credentials: { client_email?: unknown; private_key?: unknown };
-  try {
-    credentials = JSON.parse(rawCredentials) as typeof credentials;
-  } catch {
-    throw new Error("GOOGLE_SERVICE_ACCOUNT_JSON harus berisi JSON service account yang valid.");
-  }
-  if (
-    typeof credentials.client_email !== "string" ||
-    !credentials.client_email.trim() ||
-    typeof credentials.private_key !== "string" ||
-    !credentials.private_key.trim()
-  ) {
-    throw new Error("Kredensial Google Drive tidak memiliki client_email atau private_key.");
-  }
-
-  const auth = new JWT({
-    email: credentials.client_email,
-    key: credentials.private_key,
-    scopes: ["https://www.googleapis.com/auth/drive.file"],
-  });
+  const auth = new OAuth2Client(clientId, clientSecret);
+  auth.setCredentials({ refresh_token: refreshToken });
   return {
     drive: new drive_v3.Drive({ auth }),
     folderId,

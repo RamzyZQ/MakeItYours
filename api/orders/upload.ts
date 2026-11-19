@@ -95,6 +95,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
           requestBody: { name: fileName },
           media,
           fields: "id",
+          supportsAllDrives: true,
         })
       : await drive.files.create({
           requestBody: {
@@ -109,6 +110,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
           },
           media,
           fields: "id",
+          supportsAllDrives: true,
         });
 
     const fileId = uploadResult.data.id;
