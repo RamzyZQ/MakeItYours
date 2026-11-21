@@ -10,9 +10,9 @@ import { ArrowRight, Sparkles, Heart, MousePointer2, MoveDown, Layers, Download,
 import {
   isStudioOpen,
   studioStatusLabel,
-  useStoreSettings,
   type StudioId,
 } from "../services/storeSettings";
+import { useStoreSettingsContext } from "../contexts/StoreSettingsContext";
 
 const BASE_CARDS: ({ base: BaseType; icon: string } | { base: "keychain"; icon: string })[] = [
   { base: "kalung", icon: "✨" },
@@ -78,7 +78,7 @@ function HeroDemo() {
 
 export default function Home() {
   const navigate = useNavigate();
-  const { settings } = useStoreSettings();
+  const { settings } = useStoreSettingsContext();
   const [notice, setNotice] = useState<string | null>(null);
 
   const notify = (message: string) => {

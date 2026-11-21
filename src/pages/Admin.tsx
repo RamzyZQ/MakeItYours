@@ -26,6 +26,7 @@ import {
   updateAdminPin,
   useStoreSettings,
 } from "../services/storeSettings";
+import { useStoreSettingsContext } from "../contexts/StoreSettingsContext";
 
 type AdminTab = "studios" | "stock" | "security";
 
@@ -44,7 +45,7 @@ export default function Admin() {
     importLegacySettings,
     updateSettings,
     resetSettings,
-  } = useStoreSettings();
+  } = useStoreSettingsContext();
   const [unlocked, setUnlocked] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
   const [pin, setPin] = useState("");

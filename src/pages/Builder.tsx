@@ -36,8 +36,8 @@ import {
 import {
   isStudioOpen,
   studioStatusLabel,
-  useStoreSettings,
 } from "../services/storeSettings";
+import { useStoreSettingsContext } from "../contexts/StoreSettingsContext";
 
 export default function Builder() {
   const { base } = useParams<{ base: string }>();
@@ -72,7 +72,7 @@ function BuilderInner({
   setDesignParam: (id: string | null) => void;
   navigate: ReturnType<typeof useNavigate>;
 }) {
-  const { settings } = useStoreSettings();
+  const { settings } = useStoreSettingsContext();
   const studio = settings.studios[base];
   const path = getPath(base);
   const sim = useStringSim(path);

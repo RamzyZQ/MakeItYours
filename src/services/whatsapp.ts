@@ -19,38 +19,9 @@ export function openWhatsApp(text: string, targetWindow?: Window | null): boolea
   return true;
 }
 
-export function buildKeychainMessage(order: KeychainOrder, stockRemaining?: number): string {
-  const frame = FRAME_MODELS.find((f) => f.id === order.frameModel)?.label ?? order.frameModel;
-  const frontSlotCount = order.photoSlotCount ?? 3;
-  const frontPhotoCount = order.photos.slice(0, frontSlotCount).filter(Boolean).length;
-  const backSlotCount = order.backPhotoSlotCount ?? 1;
-  const backPhotoCount = (order.backPhotos ?? []).slice(0, backSlotCount).filter(Boolean).length;
-  const name = order.customerName.trim() || "Pelanggan";
-
-  const lines = [
-    `Halo ${SHOP_NAME}!`,
-    `Saya ingin pesan *Keychain Custom* (tanpa login, langsung dari website):`,
-    ``,
-    `• Nama: ${name}`,
-    `• Varian warna frame dan aksesori: ${frame}${
-      stockRemaining !== undefined ? ` (sisa stok ${stockRemaining})` : ""
-    }`,
-    ...(order.templateName ? [`• Template photobooth: ${order.templateName}`] : []),
-    `• Foto sisi depan: ${frontPhotoCount}/${frontSlotCount}`,
-    `• Foto sisi belakang: ${backPhotoCount}/${backSlotCount}`,
-  ];
-
-  if (order.note.trim()) {
-    lines.push(`• Catatan: ${order.note.trim()}`);
-  }
-
-  lines.push(
-    ``,
-    `Foto custom akan saya kirim di chat ini sebagai lampiran.`,
-    `Mohon infokan ketersediaan, harga, dan cara pembayarannya ya. Terima kasih!`,
-  );
-
-  return lines.join("\n");
+export function buildKeychainMessage(_order: KeychainOrder, _stockRemaining?: number): string {
+  // Pesan ini di-override per checkout — fungsi ini sebagai fallback
+  return "";
 }
 
 export function buildBeadDesignMessage(opts: {
@@ -67,7 +38,7 @@ export function buildBeadDesignMessage(opts: {
 
   const lines = [
     `Halo ${SHOP_NAME}!`,
-    `Saya ingin pesan rangkaian *${BASE_TYPE_LABELS[opts.base]}* dari studio (tanpa login):`,
+    `Saya ingin pesan rangkaian *${BASE_TYPE_LABELS[opts.base]}* dari studio:`,
     ``,
     `• Nama: ${customer}`,
     `• Judul desain: ${opts.name.trim() || BASE_TYPE_LABELS[opts.base]}`,

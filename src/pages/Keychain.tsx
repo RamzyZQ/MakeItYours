@@ -36,6 +36,9 @@ import AppHeader from "../components/AppHeader";
 import CheckoutModal from "../components/CheckoutModal";
 import CheckoutProductPreview from "../components/CheckoutProductPreview";
 import KeychainPreview from "../components/KeychainPreview";
+import KeychainColorSelector from "../components/keychain/KeychainColorSelector";
+import KeychainFilterDialog from "../components/keychain/KeychainFilterDialog";
+import KeychainTemplateRail from "../components/keychain/KeychainTemplateRail";
 import { usePhotoBoothEditor } from "../hooks/usePhotoBoothEditor";
 import { usePhotoBoothCanvas } from "../hooks/usePhotoBoothCanvas";
 import {
@@ -49,8 +52,7 @@ import {
   rotateLandscapeCanvasToPortrait,
   sendObjectToBack,
 } from "../services/photoBoothCanvas";
-import { useStoreSettings } from "../services/storeSettings";
-import { buildKeychainMessage } from "../services/whatsapp";
+import { useStoreSettingsContext } from "../contexts/StoreSettingsContext";
 import {
   DEFAULT_KEYCHAIN_ORDER,
   FRAME_MODELS,
@@ -161,7 +163,19 @@ async function getApiError(response: Response, fallback: string): Promise<string
 }
 
 export default function Keychain() {
-  const { settings } = useStoreSettings();
+  const { settings } = useStoreSettingsContext();
+
+  // Lazy-load font editor (hanya 9 font tambahan, bukan di halaman awal)
+  React.useEffect(() => {
+    const existing = document.getElementById("keychain-editor-fonts");
+    if (existing) return;
+    const link = document.createElement("link");
+    link.id = "keychain-editor-fonts";
+    link.rel = "stylesheet";
+    link.href =
+      "https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Caveat:wght@400;700&family=DM+Sans:wght@400;500;700&family=Lora:wght@400;700&family=Montserrat:wght@400;700&family=Nunito:wght@400;700&family=Pacifico&family=Playfair+Display:wght@400;700&family=Poppins:wght@400;700&display=swap";
+    document.head.appendChild(link);
+  }, []);
   const [order, setOrder] = useState<KeychainOrder>(DEFAULT_KEYCHAIN_ORDER);
   const [template, setTemplate] = useState<PhotoBoothTemplate>(
     PHOTOBOOTH_TEMPLATES.find((item) => item.id === "8") ?? PHOTOBOOTH_TEMPLATES[0],
@@ -1011,7 +1025,9 @@ export default function Keychain() {
       selectedPhotoIndex: null,
     }));
     if (object.kind === "text") {
-      setActiveTool("text");
+      // Switch ke "move" setelah menambah teks agar klik berikutnya tidak
+      // membuat teks baru lagi (mencegah duplikat tidak disengaja)
+      setActiveTool("move");
       setFocusTextInput(true);
       setToolDockCollapsed(false);
       return;
@@ -1041,6 +1057,11 @@ export default function Keychain() {
   });
 
   const addCenteredText = () => {
+    // Jika sudah ada teks yang terpilih, fokuskan saja (jangan duplikat)
+    if (selectedObject?.kind === "text") {
+      setFocusTextInput(true);
+      return;
+    }
     addEditorObject(createTextObject(
       sideTemplate.canvasSize.width / 2,
       sideTemplate.canvasSize.height / 2,
@@ -1990,31 +2011,11 @@ export default function Keychain() {
           </section>
 
           <section className="booth-panel flex min-h-[480px] flex-col gap-4 overflow-hidden p-4 sm:p-5 lg:overflow-y-auto">
-            <section>
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <div>
-                  <h2 className="font-display text-base font-bold text-[var(--booth-ink)]">Pilih frame</h2>
-                  <p className="booth-muted text-xs">Foto tetap tersimpan saat layout diganti.</p>
-                </div>
-                <span className="booth-count">{PHOTOBOOTH_TEMPLATES.length} desain</span>
-              </div>
-              <div className="booth-template-rail flex gap-2 overflow-x-auto pb-2 pt-1">
-                {PHOTOBOOTH_TEMPLATES.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    disabled={isCapturing}
-                    aria-label={`Pilih template ${item.name}`}
-                    aria-pressed={template.id === item.id}
-                    onClick={() => chooseTemplate(item)}
-                    className={`booth-template-card shrink-0 ${template.id === item.id ? "is-selected" : ""}`}
-                  >
-                    <img src={item.frameUrl} alt="" loading="lazy" />
-                    <span>{item.name}</span>
-                  </button>
-                ))}
-              </div>
-            </section>
+            <KeychainTemplateRail
+              selected={template}
+              disabled={isCapturing}
+              onSelect={chooseTemplate}
+            />
 
             <section className="booth-control-section">
               <div className="mb-3 flex items-center justify-between gap-2">
@@ -2219,140 +2220,35 @@ export default function Keychain() {
               )}
             </section>
 
-            <section className="booth-control-section">
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <div>
-                  <h2 className="font-display text-base font-bold text-[var(--booth-ink)]">Warna aksesori</h2>
-                  <p className="booth-muted text-xs">Pilih warna charm, lonceng, dan tali.</p>
-                </div>
-                <span className="booth-muted text-xs">{selectedColor.label}</span>
-              </div>
-              {allKeychainOutOfStock && (
-                <p className="mb-2 rounded-xl bg-[#FFF1F2] px-3 py-2 text-xs font-bold text-[#BE123C]" role="alert">
-                  Semua varian keychain sedang habis
-                </p>
-              )}
-              <div className="grid grid-cols-4 gap-2">
-                {FRAME_MODELS.map((frame) => {
-                  const stock = keychainStock[frame.id];
-                  const soldOut = stock <= 0;
-                  return (
-                    <button
-                      key={frame.id}
-                      type="button"
-                      disabled={soldOut}
-                      aria-pressed={order.frameModel === frame.id}
-                      onClick={() => {
-                        if (soldOut) return;
-                        setOrder((current) => ({ ...current, frameModel: frame.id }));
-                      }}
-                      className={`booth-color-option ${order.frameModel === frame.id ? "is-selected" : ""} ${soldOut ? "is-soldout" : ""}`}
-                    >
-                      <span style={{ backgroundColor: frame.color.hex, borderColor: frame.color.hexDark }} />
-                      <span className="booth-color-option-copy">
-                        {frame.label}
-                        <small className={`booth-stock-badge${soldOut ? " is-empty" : ""}`}>
-                          {soldOut ? "Habis" : `Sisa ${stock}`}
-                        </small>
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-              <div className="booth-order-actions">
-                <button
-                  type="button"
-                  aria-label="Unduh PNG kedua sisi"
-                  onClick={() => void downloadBothSides("png")}
-                  disabled={isRendering || Boolean(renderError)}
-                  className="booth-secondary-action"
-                >
-                  <Download className="h-4 w-4" />
-                  <span className="hidden sm:inline">PNG 2 sisi</span>
-                  <span className="sm:hidden">PNG ×2</span>
-                </button>
-                <button
-                  type="button"
-                  aria-label="Unduh JPG kedua sisi"
-                  onClick={() => void downloadBothSides("jpg")}
-                  disabled={isRendering || Boolean(renderError)}
-                  className="booth-secondary-action"
-                >
-                  <Download className="h-4 w-4" />
-                  <span className="hidden sm:inline">JPG 2 sisi</span>
-                  <span className="sm:hidden">JPG ×2</span>
-                </button>
-                <button
-                  type="button"
-                  aria-label="Pesan dan lanjutkan ke WhatsApp"
-                  onClick={() => {
-                    if (allKeychainOutOfStock) {
-                      notify("Semua varian keychain sedang habis.", true);
-                      return;
-                    }
-                    void openCheckout();
-                  }}
-                  disabled={isCheckoutBusy || allKeychainOutOfStock}
-                  className="booth-primary-action"
-                >
-                  <MessageCircle className="h-4 w-4" />
-                  {allKeychainOutOfStock
-                    ? "Stok habis"
-                    : isRendering ? "Memperbarui…" : isPreparingCheckout ? "Menyiapkan…" : "Pesan"}
-                </button>
-              </div>
-            </section>
+            <KeychainColorSelector
+              order={order}
+              settings={settings}
+              isRendering={isRendering}
+              renderError={renderError}
+              isCheckoutBusy={isCheckoutBusy}
+              isPreparingCheckout={isPreparingCheckout}
+              allKeychainOutOfStock={allKeychainOutOfStock}
+              selectedColorLabel={selectedColor.label}
+              onSelectColor={(id) => setOrder((current) => ({ ...current, frameModel: id }))}
+              onDownload={(format) => void downloadBothSides(format)}
+              onCheckout={() => {
+                if (allKeychainOutOfStock) {
+                  notify("Semua varian keychain sedang habis.", true);
+                  return;
+                }
+                void openCheckout();
+              }}
+            />
           </section>
         </div>
       </main>
 
-      <dialog
-        ref={filterDialogRef}
-        aria-labelledby="filter-dialog-title"
-        className="booth-filter-dialog"
-        onCancel={() => {
-          setFilterSettingsOpen(false);
-        }}
+      <KeychainFilterDialog
+        dialogRef={filterDialogRef}
+        filter={filter}
+        onFilterChange={setFilter}
         onClose={() => setFilterSettingsOpen(false)}
-        onClick={(event) => {
-          if (event.target === event.currentTarget) setFilterSettingsOpen(false);
-        }}
-      >
-        <div className="mb-4 flex items-start justify-between gap-3">
-          <div>
-            <p className="booth-eyebrow">PENYESUAIAN FOTO</p>
-            <h2 id="filter-dialog-title" className="mt-1 font-display text-lg font-bold text-[var(--booth-ink)]">
-              Pengaturan filter
-            </h2>
-            <p className="booth-muted mt-1 text-xs">Filter hanya mengubah foto, bukan desain frame.</p>
-          </div>
-          <button
-            type="button"
-            aria-label="Tutup pengaturan filter"
-            onClick={() => setFilterSettingsOpen(false)}
-            className="booth-icon-button"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          {FILTER_OPTIONS.map((option) => (
-            <button
-              key={option.id}
-              type="button"
-              aria-pressed={filter === option.id}
-              onClick={() => setFilter(option.id)}
-              className={`booth-filter-option ${filter === option.id ? "is-selected" : ""}`}
-            >
-              <span className="block text-sm font-bold">{option.label}</span>
-              <span className="mt-1 block text-xs">{option.description}</span>
-            </button>
-          ))}
-        </div>
-        <button type="button" onClick={() => setFilterSettingsOpen(false)} className="booth-primary-action mt-4 w-full">
-          Selesai
-        </button>
-      </dialog>
+      />
 
       <CheckoutModal
         open={checkoutOpen}
@@ -2381,15 +2277,19 @@ export default function Keychain() {
         showCustomerFields={false}
         submitLabel="Pesan & lanjut WhatsApp"
         compactPreviewOnly
-        buildMessage={(customerName, note) => {
-          const orderWithCustomer: KeychainOrder = {
-            ...currentOrder,
-            customerName: customerName || order.customerName,
-            note: note || order.note,
-          };
-          const baseMsg = buildKeychainMessage(orderWithCustomer, keychainStock[order.frameModel]);
+        buildMessage={(_customerName, _note) => {
           const code = checkoutCodeRef.current;
-          return code ? `${baseMsg}\n\n*Kode Desain:* ${code}` : baseMsg;
+          return [
+            "⋆ 。⋆୨୧˚ *KONFIRMASI PEMESANAN* ˚୨୧⋆。 ⋆",
+            "",
+            "Halo MakeitYours! ♡",
+            "",
+            "Mau konfirmasi pesanan dengan kode desain berikut:",
+            "",
+            `*Kode Desain:* ${code || "(sedang diproses)"}`,
+            "",
+            "Mohon info untuk langkah selanjutnya yaa. Terima kasih! ♡",
+          ].join("\n");
         }}
         onBeforeSend={onBeforeCheckoutSend}
         onClose={closeCheckout}

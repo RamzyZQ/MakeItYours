@@ -1357,11 +1357,11 @@
 
 .checkout-product-preview__mockup-wrap {
   position: relative;
-  width: min(100%, 220px);
+  width: min(100%, 260px);
 }
 
 .checkout-product-preview.is-compact .checkout-product-preview__mockup-wrap {
-  width: min(100%, 168px);
+  width: min(100%, 220px);
 }
 
 .checkout-product-preview__mockup {

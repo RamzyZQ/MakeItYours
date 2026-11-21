@@ -97,6 +97,18 @@ export default function CheckoutModal({
       setError("WhatsApp tidak dapat dibuka. Coba izinkan pop-up di browser.");
       return;
     }
+    // Tampilkan halaman loading sementara menunggu proses upload
+    whatsappWindow.document.write(
+      `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Menyiapkan pesanan…</title>
+      <style>body{font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#FFF8FA;color:#372A3C;flex-direction:column;gap:12px}
+      .dot{width:10px;height:10px;border-radius:50%;background:#F472B6;display:inline-block;animation:bounce 1.2s ease infinite}
+      .dot:nth-child(2){animation-delay:.2s}.dot:nth-child(3){animation-delay:.4s}
+      @keyframes bounce{0%,80%,100%{transform:scale(0)}40%{transform:scale(1)}}</style></head>
+      <body><p style="font-weight:700;font-size:18px">🌸 Menyiapkan pesanmu…</p>
+      <div><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+      <p style="font-size:13px;color:#8B7A90">Sedang mengupload desain ke server</p></body></html>`
+    );
+    whatsappWindow.document.close();
     setError(null);
     setIsSending(true);
     try {

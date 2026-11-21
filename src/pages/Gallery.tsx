@@ -70,6 +70,18 @@ export default function Gallery() {
       <AppHeader />
 
       <main className="mx-auto max-w-6xl w-full px-4 py-8 sm:py-12 sm:px-6">
+        {/* Banner peringatan localStorage */}
+        <div className="mb-6 flex items-start gap-3 rounded-2xl border border-[#FDE68A] bg-[#FFFBEB] px-4 py-3 text-sm text-[#92400E]">
+          <span className="mt-0.5 shrink-0 text-lg">💾</span>
+          <div>
+            <p className="font-bold">Desainmu tersimpan di browser ini saja</p>
+            <p className="mt-0.5 text-xs leading-relaxed opacity-80">
+              Galeri menggunakan penyimpanan lokal (localStorage). Desain <strong>tidak tersinkronisasi</strong> ke perangkat lain
+              dan akan hilang jika kamu ganti HP, hapus data browser, atau buka di mode Incognito.
+              Unduh desainmu sebagai PNG untuk menyimpannya secara permanen.
+            </p>
+          </div>
+        </div>
         {/* Header Section */}
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-8 border-b border-[#FCE7F3]">
           <div>
