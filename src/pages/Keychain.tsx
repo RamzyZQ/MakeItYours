@@ -85,6 +85,13 @@ const FILTER_OPTIONS: { id: PhotoFilter; label: string; description: string }[] 
 const FONT_OPTIONS = [
   "Quicksand",
   "Plus Jakarta Sans",
+  "Cherry Bomb One",
+  "Cormorant Garamond",
+  "Frankfurter Normal",
+  "Roca One",
+  "Copperplate Gothic 29 BC",
+  "Times New Roman MT",
+  "Perandory",
   "DM Sans",
   "Poppins",
   "Montserrat",
@@ -165,7 +172,7 @@ async function getApiError(response: Response, fallback: string): Promise<string
 export default function Keychain() {
   const { settings } = useStoreSettingsContext();
 
-  // Lazy-load font editor (hanya 9 font tambahan, bukan di halaman awal)
+  // Lazy-load font editor
   React.useEffect(() => {
     const existing = document.getElementById("keychain-editor-fonts");
     if (existing) return;
@@ -173,7 +180,7 @@ export default function Keychain() {
     link.id = "keychain-editor-fonts";
     link.rel = "stylesheet";
     link.href =
-      "https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Caveat:wght@400;700&family=DM+Sans:wght@400;500;700&family=Lora:wght@400;700&family=Montserrat:wght@400;700&family=Nunito:wght@400;700&family=Pacifico&family=Playfair+Display:wght@400;700&family=Poppins:wght@400;700&display=swap";
+      "https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Caveat:wght@400;700&family=Cherry+Bomb+One&family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=DM+Sans:wght@400;500;700&family=Lora:wght@400;700&family=Montserrat:wght@400;700&family=Nunito:wght@400;700&family=Pacifico&family=Playfair+Display:wght@400;700&family=Poppins:wght@400;700&display=swap";
     document.head.appendChild(link);
   }, []);
   const [order, setOrder] = useState<KeychainOrder>(DEFAULT_KEYCHAIN_ORDER);
@@ -195,6 +202,7 @@ export default function Keychain() {
   const [activeTool, setActiveTool] = useState<PhotoBoothTool>("move");
   const [brushColor, setBrushColor] = useState("#b83e68");
   const [brushSize, setBrushSize] = useState(12);
+  const [fontOptions, setFontOptions] = useState<string[]>(FONT_OPTIONS);
   const [textDraft, setTextDraft] = useState("Tulis sesuatu");
   const [textFont, setTextFont] = useState(FONT_OPTIONS[0]);
   const [textColor, setTextColor] = useState("#382c30");
@@ -217,6 +225,7 @@ export default function Keychain() {
   const batchInputSideRef = useRef<PhotoBoothSide>("front");
   const batchInputSlotCountRef = useRef(0);
   const cancelledCaptureRef = useRef(false);
+  const customFontInputRef = useRef<HTMLInputElement>(null);
   const dragRef = useRef<{
     side: PhotoBoothSide;
     objectId: string;
@@ -224,7 +233,7 @@ export default function Keychain() {
     offsetY: number;
     initial: EditorObject;
     before: PhotoBoothDocument;
-    mode: "move" | "resize";
+    mode: "move" | "resize" | "rotate";
     moved: boolean;
   } | null>(null);
   const photoDragRef = useRef<{
@@ -245,7 +254,7 @@ export default function Keychain() {
   const singleInputRef = useRef<HTMLInputElement>(null);
   const multipleInputRef = useRef<HTMLInputElement>(null);
   const stickerPngInputRef = useRef<HTMLInputElement>(null);
-  const textInputRef = useRef<HTMLTextAreaElement>(null);
+  const textInputRef = useRef<HTMLInputElement>(null);
   const liveDrawingRef = useRef<HTMLCanvasElement>(null);
   const filterDialogRef = useRef<HTMLDialogElement>(null);
   const filterSettingsButtonRef = useRef<HTMLButtonElement>(null);
@@ -1035,12 +1044,24 @@ export default function Keychain() {
     setActiveTool("move");
   };
 
+  const toLocalPoint = (point: { x: number; y: number }, item: EditorObject) => {
+    const rad = (-item.rotation * Math.PI) / 180;
+    const dx = point.x - item.x;
+    const dy = point.y - item.y;
+    return {
+      x: dx * Math.cos(rad) - dy * Math.sin(rad),
+      y: dx * Math.sin(rad) + dy * Math.cos(rad),
+    };
+  };
+
   const hitTestObject = (point: { x: number; y: number }) =>
-    [...currentDocument.objects].reverse().find(
-      (item) =>
-        Math.abs(point.x - item.x) <= item.width / 2 &&
-        Math.abs(point.y - item.y) <= item.height / 2,
-    );
+    [...currentDocument.objects].reverse().find((item) => {
+      const local = toLocalPoint(point, item);
+      return (
+        Math.abs(local.x) <= item.width / 2 + 10 &&
+        Math.abs(local.y) <= item.height / 2 + 10
+      );
+    });
 
   const createTextObject = (x: number, y: number): EditorObject => ({
     id: `text-${Date.now()}`,
@@ -1076,11 +1097,34 @@ export default function Keychain() {
     }), false);
     setToolDockCollapsed(false);
     if (object.kind === "text") {
-      setActiveTool("text");
+      // TIDAK berpindah ke activeTool "text" otomatis, agar pengguna tetap dapat move/transform di kanvas
       setTextDraft(object.text ?? "Teks baru");
-      setTextFont(object.fontFamily ?? FONT_OPTIONS[0]);
+      setTextFont(object.fontFamily ?? fontOptions[0]);
       setTextColor(object.color ?? "#382c30");
       setTextSize(object.fontSize ?? 64);
+    }
+  };
+
+  const handleUploadFont = async (file: File | undefined) => {
+    if (!file) return;
+    try {
+      const rawName = file.name.replace(/\.[^/.]+$/, "").trim();
+      const fontName = rawName || "CustomFont";
+      const buffer = await file.arrayBuffer();
+      const fontFace = new FontFace(fontName, buffer);
+      const loaded = await fontFace.load();
+      document.fonts.add(loaded);
+      setFontOptions((prev) => (prev.includes(fontName) ? prev : [fontName, ...prev]));
+      setTextFont(fontName);
+      if (selectedObject?.kind === "text") {
+        updateSelectedObject({ fontFamily: fontName });
+      }
+      notify(`Font "${fontName}" berhasil dimuat! ✨`);
+    } catch (err) {
+      notify(
+        err instanceof Error ? err.message : "Gagal memuat file font (.ttf / .otf / .woff2).",
+        true,
+      );
     }
   };
 
@@ -1139,8 +1183,9 @@ export default function Keychain() {
     context.restore();
   };
 
-  const handleCanvasPointerLeave = () => {
+  const handleCanvasPointerLeave = (event: React.PointerEvent<HTMLCanvasElement>) => {
     if (!brushStrokeRef.current) clearLiveDrawing();
+    event.currentTarget.style.cursor = "default";
   };
 
   const handleCanvasDoubleClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
@@ -1208,15 +1253,68 @@ export default function Keychain() {
       return;
     }
 
+    // 1. Cek apakah ada objek yang sedang terpilih dan pointer mengenai handle Rotate atau Resize
+    if (selectedObject) {
+      const localP = toLocalPoint(point, selectedObject);
+      const rotateHandleY = -selectedObject.height / 2 - 34;
+      const isRotateHit = Math.hypot(localP.x - 0, localP.y - rotateHandleY) <= 24;
+
+      if (isRotateHit) {
+        dragRef.current = {
+          side: activeSide,
+          objectId: selectedObject.id,
+          offsetX: 0,
+          offsetY: 0,
+          initial: selectedObject,
+          before: currentDocument,
+          mode: "rotate",
+          moved: false,
+        };
+        event.currentTarget.setPointerCapture(event.pointerId);
+        return;
+      }
+
+      const resizeHandleX = selectedObject.width / 2;
+      const resizeHandleY = selectedObject.height / 2;
+      const isResizeHit = Math.hypot(localP.x - resizeHandleX, localP.y - resizeHandleY) <= 24;
+
+      if (isResizeHit) {
+        dragRef.current = {
+          side: activeSide,
+          objectId: selectedObject.id,
+          offsetX: 0,
+          offsetY: 0,
+          initial: selectedObject,
+          before: currentDocument,
+          mode: "resize",
+          moved: false,
+        };
+        event.currentTarget.setPointerCapture(event.pointerId);
+        return;
+      }
+    }
+
     const hit = hitTestObject(point);
     if (!hit) {
-      const photoIndex = currentSlots.findIndex((slot, index) =>
-        Boolean(sidePhotos[index]) &&
-        point.x >= slot.x &&
-        point.x <= slot.x + slot.width &&
-        point.y >= slot.y &&
-        point.y <= slot.y + slot.height,
-      );
+      const photoIndex = currentSlots.findIndex((slot, index) => {
+        if (!Boolean(sidePhotos[index])) return false;
+        if (!slot.rotation) {
+          return (
+            point.x >= slot.x &&
+            point.x <= slot.x + slot.width &&
+            point.y >= slot.y &&
+            point.y <= slot.y + slot.height
+          );
+        }
+        const centerX = slot.x + slot.width / 2;
+        const centerY = slot.y + slot.height / 2;
+        const rad = (-slot.rotation * Math.PI) / 180;
+        const dx = point.x - centerX;
+        const dy = point.y - centerY;
+        const lx = dx * Math.cos(rad) - dy * Math.sin(rad);
+        const ly = dx * Math.sin(rad) + dy * Math.cos(rad);
+        return Math.abs(lx) <= slot.width / 2 && Math.abs(ly) <= slot.height / 2;
+      });
       updateDocument(activeSide, (document) => ({
         ...document,
         selectedObjectId: null,
@@ -1236,8 +1334,6 @@ export default function Keychain() {
       return;
     }
 
-    const resizeHandle = Math.abs(point.x - (hit.x + hit.width / 2)) < 24 &&
-      Math.abs(point.y - (hit.y + hit.height / 2)) < 24;
     selectCanvasObject(hit);
     dragRef.current = {
       side: activeSide,
@@ -1246,7 +1342,7 @@ export default function Keychain() {
       offsetY: point.y - hit.y,
       initial: hit,
       before: currentDocument,
-      mode: resizeHandle ? "resize" : "move",
+      mode: "move",
       moved: false,
     };
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -1306,29 +1402,81 @@ export default function Keychain() {
       photoDrag.lastY = point.y;
       if (Math.abs(deltaX) + Math.abs(deltaY) > 0) {
         photoDrag.moved = true;
+        const slot = currentSlots[photoDrag.index];
+        let moveX = deltaX;
+        let moveY = deltaY;
+        if (slot?.rotation) {
+          const rad = (-slot.rotation * Math.PI) / 180;
+          moveX = deltaX * Math.cos(rad) - deltaY * Math.sin(rad);
+          moveY = deltaX * Math.sin(rad) + deltaY * Math.cos(rad);
+        }
         updatePhotoAdjustment(photoDrag.index, {
-          panX: (currentDocument.photoAdjustments[photoDrag.index]?.panX ?? 0) + deltaX,
-          panY: (currentDocument.photoAdjustments[photoDrag.index]?.panY ?? 0) + deltaY,
+          panX: (currentDocument.photoAdjustments[photoDrag.index]?.panX ?? 0) + moveX,
+          panY: (currentDocument.photoAdjustments[photoDrag.index]?.panY ?? 0) + moveY,
         }, false);
       }
       return;
     }
-    if (!drag || drag.side !== activeSide) return;
-    drag.moved = true;
-    updateDocument(drag.side, (document) => ({
-      ...document,
-      objects: document.objects.map((item) => {
-        if (item.id !== drag.objectId) return item;
-        if (drag.mode === "resize") {
-          return {
-            ...item,
-            width: Math.max(40, Math.abs(point.x - item.x) * 2),
-            height: Math.max(40, Math.abs(point.y - item.y) * 2),
-          };
-        }
-        return { ...item, x: point.x - drag.offsetX, y: point.y - drag.offsetY };
-      }),
-    }), false);
+    if (drag && drag.side === activeSide) {
+      drag.moved = true;
+      updateDocument(drag.side, (document) => ({
+        ...document,
+        objects: document.objects.map((item) => {
+          if (item.id !== drag.objectId) return item;
+          if (drag.mode === "rotate") {
+            const angleRad = Math.atan2(point.y - drag.initial.y, point.x - drag.initial.x);
+            let deg = Math.round((angleRad * 180) / Math.PI + 90);
+            deg = ((deg % 360) + 540) % 360 - 180;
+            return { ...item, rotation: deg };
+          }
+          if (drag.mode === "resize") {
+            const localP = toLocalPoint(point, drag.initial);
+            const scaleX = Math.max(0.3, (localP.x * 2) / drag.initial.width);
+            const scaleY = Math.max(0.3, (localP.y * 2) / drag.initial.height);
+            const scale = Math.max(0.3, Math.min(5, Math.max(scaleX, scaleY)));
+            const newWidth = Math.max(40, Math.round(drag.initial.width * scale));
+            if (item.kind === "text") {
+              const baseFontSize = drag.initial.fontSize ?? 64;
+              const newFontSize = Math.max(16, Math.min(220, Math.round(baseFontSize * scale)));
+              return {
+                ...item,
+                width: newWidth,
+                fontSize: newFontSize,
+                height: Math.round(newFontSize * 1.4),
+              };
+            }
+            const newHeight = Math.max(40, Math.round(drag.initial.height * scale));
+            return { ...item, width: newWidth, height: newHeight };
+          }
+          return { ...item, x: point.x - drag.offsetX, y: point.y - drag.offsetY };
+        }),
+      }), false);
+      return;
+    }
+
+    // Dynamic cursor feedback saat kursor berada di atas kanvas
+    if (activeTool === "move" && selectedObject) {
+      const localP = toLocalPoint(point, selectedObject);
+      const rotateHandleY = -selectedObject.height / 2 - 34;
+      const isRotateHover = Math.hypot(localP.x - 0, localP.y - rotateHandleY) <= 24;
+      const resizeHandleX = selectedObject.width / 2;
+      const resizeHandleY = selectedObject.height / 2;
+      const isResizeHover = Math.hypot(localP.x - resizeHandleX, localP.y - resizeHandleY) <= 24;
+      const isBodyHover = Math.abs(localP.x) <= selectedObject.width / 2 + 10 && Math.abs(localP.y) <= selectedObject.height / 2 + 10;
+
+      if (isRotateHover) {
+        event.currentTarget.style.cursor = "grab";
+      } else if (isResizeHover) {
+        event.currentTarget.style.cursor = "nwse-resize";
+      } else if (isBodyHover) {
+        event.currentTarget.style.cursor = "move";
+      } else {
+        event.currentTarget.style.cursor = "default";
+      }
+    } else if (activeTool === "move") {
+      const hit = hitTestObject(point);
+      event.currentTarget.style.cursor = hit ? "move" : "default";
+    }
   };
 
   const handleCanvasPointerUp = (event: React.PointerEvent<HTMLCanvasElement>) => {
@@ -1374,6 +1522,7 @@ export default function Keychain() {
       if (drag.moved) recordDocumentSnapshot(drag.side, drag.before);
       dragRef.current = null;
     }
+    event.currentTarget.style.cursor = "default";
   };
 
   const onPickStickerPng = async (file: File | undefined) => {
@@ -1449,203 +1598,348 @@ export default function Keychain() {
 
   const selectedText = selectedObject?.kind === "text" ? selectedObject : null;
 
-  const toolSettings = (
+  const toolTopBar = (
     <>
-      {(activeTool === "brush" || activeTool === "eraser") && (
-        <div className="booth-editor-settings">
-          {activeTool === "brush" && (
+      <input
+        ref={customFontInputRef}
+        type="file"
+        accept=".ttf,.otf,.woff,.woff2"
+        className="hidden"
+        onChange={(e) => {
+          void handleUploadFont(e.target.files?.[0]);
+          e.currentTarget.value = "";
+        }}
+      />
+      <input
+        ref={stickerPngInputRef}
+        type="file"
+        accept="image/png"
+        className="hidden"
+        onChange={(event) => {
+          void onPickStickerPng(event.target.files?.[0]);
+          event.currentTarget.value = "";
+        }}
+      />
+
+      {(selectedText || activeTool === "text") && (
+        <div className="booth-tool-topbar">
+          {selectedText ? (
             <>
-              <label className="booth-editor-label">
-                Warna
-                <input
-                  type="color"
-                  value={brushColor}
-                  onChange={(event) => setBrushColor(event.target.value)}
-                  aria-label="Warna brush"
-                />
-              </label>
-              <div className="booth-editor-swatches">
-                {["#b83e68", "#382c30", "#ffffff", "#e7a5bd", "#7d9bb5", "#e7b44a"].map((color) => (
-                  <button
-                    key={color}
-                    type="button"
-                    aria-label={`Pilih warna ${color}`}
-                    aria-pressed={brushColor === color}
-                    onClick={() => setBrushColor(color)}
-                    style={{ backgroundColor: color }}
+              <input
+                ref={textInputRef}
+                type="text"
+                maxLength={60}
+                placeholder="Tulis sesuatu..."
+                value={selectedText.text ?? ""}
+                onChange={(e) => updateSelectedObject({ text: e.target.value })}
+                className="h-8 w-28 sm:w-40 md:w-52 px-2.5 text-xs font-semibold rounded-lg border border-[var(--booth-border)] bg-white text-[var(--booth-ink)] focus:outline-none focus:ring-1 focus:ring-[#DB2777] shrink-0"
+              />
+              <select
+                value={selectedText.fontFamily ?? fontOptions[0]}
+                onChange={(e) => updateSelectedObject({ fontFamily: e.target.value })}
+                className="h-8 px-2 text-xs font-semibold rounded-lg border border-[var(--booth-border)] bg-white text-[var(--booth-ink)] max-w-[120px] sm:max-w-[140px] shrink-0 focus:outline-none focus:ring-1 focus:ring-[#DB2777]"
+              >
+                {fontOptions.map((font) => <option key={font} value={font}>{font}</option>)}
+              </select>
+              <button
+                type="button"
+                title="Unggah font sendiri (.ttf, .otf, .woff2)"
+                onClick={() => customFontInputRef.current?.click()}
+                className="h-8 px-2 rounded-lg border border-[var(--booth-border)] bg-white hover:bg-pink-50 text-[#DB2777] text-xs font-bold flex items-center gap-1 shrink-0"
+              >
+                <Upload className="h-3.5 w-3.5" />
+                <span className="hidden md:inline">Font</span>
+              </button>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <label
+                  className="relative flex items-center justify-center w-7 h-7 rounded-full border border-gray-300 cursor-pointer overflow-hidden shadow-xs hover:scale-105 transition-transform shrink-0"
+                  style={{ backgroundColor: selectedText.color ?? "#382c30" }}
+                  title="Pilih warna bebas"
+                >
+                  <input
+                    type="color"
+                    value={selectedText.color ?? "#382c30"}
+                    onChange={(e) => updateSelectedObject({ color: e.target.value })}
+                    className="opacity-0 absolute inset-0 cursor-pointer w-full h-full"
                   />
-                ))}
+                </label>
+                <div className="hidden lg:flex items-center gap-1">
+                  {TEXT_COLOR_OPTIONS.slice(0, 5).map((color) => (
+                    <button
+                      key={color}
+                      type="button"
+                      aria-label={`Pilih warna ${color}`}
+                      onClick={() => updateSelectedObject({ color })}
+                      style={{ backgroundColor: color }}
+                      className={`w-5 h-5 rounded-full border border-black/10 shadow-xs hover:scale-110 transition-transform ${selectedText.color === color ? "ring-2 ring-[#DB2777]" : ""}`}
+                    />
+                  ))}
+                </div>
               </div>
+              <div className="flex items-center gap-0.5 shrink-0 border-l border-gray-200 pl-1">
+                <button
+                  type="button"
+                  title="Pindah ke depan"
+                  disabled={!canMoveLayerUp}
+                  onClick={() => applyObjectLayer(moveObjectUp)}
+                  className="p-1 rounded text-gray-500 hover:text-black disabled:opacity-30"
+                >
+                  <ChevronUp className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  title="Pindah ke belakang"
+                  disabled={!canMoveLayerDown}
+                  onClick={() => applyObjectLayer(moveObjectDown)}
+                  className="p-1 rounded text-gray-500 hover:text-black disabled:opacity-30"
+                >
+                  <ChevronDown className="h-4 w-4" />
+                </button>
+              </div>
+              <button
+                type="button"
+                title="Hapus teks"
+                onClick={deleteSelectedObject}
+                className="h-8 w-8 rounded-lg border border-red-200 text-red-500 hover:bg-red-50 hover:text-red-700 flex items-center justify-center shrink-0 ml-auto"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                title="Selesai"
+                onClick={() => {
+                  updateDocument(activeSide, (doc) => ({ ...doc, selectedObjectId: null }), false);
+                  if (activeTool === "text") selectEditorTool("move");
+                }}
+                className="h-8 w-8 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 flex items-center justify-center shrink-0"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={addCenteredText}
+                className="h-8 px-3 rounded-lg bg-[#DB2777] text-white text-xs font-bold hover:bg-[#be185d] flex items-center gap-1.5 shrink-0 shadow-sm"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Tambah Teks
+              </button>
+              <input
+                type="text"
+                placeholder="Tulis sesuatu..."
+                maxLength={60}
+                value={textDraft}
+                onChange={(e) => setTextDraft(e.target.value)}
+                className="h-8 w-28 sm:w-40 md:w-52 px-2.5 text-xs font-semibold rounded-lg border border-[var(--booth-border)] bg-white text-[var(--booth-ink)] focus:outline-none focus:ring-1 focus:ring-[#DB2777] shrink-0"
+              />
+              <select
+                value={textFont}
+                onChange={(e) => setTextFont(e.target.value)}
+                className="h-8 px-2 text-xs font-semibold rounded-lg border border-[var(--booth-border)] bg-white text-[var(--booth-ink)] max-w-[120px] sm:max-w-[140px] shrink-0 focus:outline-none focus:ring-1 focus:ring-[#DB2777]"
+              >
+                {fontOptions.map((font) => <option key={font} value={font}>{font}</option>)}
+              </select>
+              <button
+                type="button"
+                title="Unggah font sendiri (.ttf, .otf, .woff2)"
+                onClick={() => customFontInputRef.current?.click()}
+                className="h-8 px-2 rounded-lg border border-[var(--booth-border)] bg-white hover:bg-pink-50 text-[#DB2777] text-xs font-bold flex items-center gap-1 shrink-0"
+              >
+                <Upload className="h-3.5 w-3.5" />
+                <span className="hidden md:inline">Font</span>
+              </button>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <label
+                  className="relative flex items-center justify-center w-7 h-7 rounded-full border border-gray-300 cursor-pointer overflow-hidden shadow-xs hover:scale-105 transition-transform shrink-0"
+                  style={{ backgroundColor: textColor }}
+                  title="Pilih warna bebas"
+                >
+                  <input
+                    type="color"
+                    value={textColor}
+                    onChange={(e) => setTextColor(e.target.value)}
+                    className="opacity-0 absolute inset-0 cursor-pointer w-full h-full"
+                  />
+                </label>
+              </div>
+              <button
+                type="button"
+                title="Tutup"
+                onClick={() => selectEditorTool("move")}
+                className="h-8 w-8 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 flex items-center justify-center shrink-0 ml-auto"
+              >
+                <X className="h-4 w-4" />
+              </button>
             </>
           )}
-          <label className="booth-editor-range">
-            Ukuran {brushSize}px
+        </div>
+      )}
+
+      {activeTool === "brush" && (
+        <div className="booth-tool-topbar">
+          <span className="text-xs font-bold text-[var(--booth-ink)] flex items-center gap-1.5 shrink-0">
+            <Brush className="h-4 w-4 text-[#DB2777]" />
+            Brush
+          </span>
+          <label
+            className="relative flex items-center justify-center w-7 h-7 rounded-full border border-gray-300 cursor-pointer overflow-hidden shadow-xs shrink-0"
+            style={{ backgroundColor: brushColor }}
+            title="Pilih warna brush"
+          >
+            <input
+              type="color"
+              value={brushColor}
+              onChange={(e) => setBrushColor(e.target.value)}
+              className="opacity-0 absolute inset-0 cursor-pointer w-full h-full"
+            />
+          </label>
+          <div className="hidden sm:flex items-center gap-1 shrink-0">
+            {["#b83e68", "#382c30", "#ffffff", "#e7a5bd", "#7d9bb5", "#e7b44a"].map((color) => (
+              <button
+                key={color}
+                type="button"
+                aria-label={`Warna ${color}`}
+                onClick={() => setBrushColor(color)}
+                style={{ backgroundColor: color }}
+                className={`w-5 h-5 rounded-full border border-black/10 shadow-xs hover:scale-110 transition-transform ${brushColor === color ? "ring-2 ring-[#DB2777]" : ""}`}
+              />
+            ))}
+          </div>
+          <div className="flex items-center gap-2 shrink-0 ml-2">
+            <span className="text-[11px] font-semibold text-gray-500 whitespace-nowrap">{brushSize}px</span>
             <input
               type="range"
               min="3"
               max="80"
               value={brushSize}
-              onChange={(event) => setBrushSize(Number(event.target.value))}
+              onChange={(e) => setBrushSize(Number(e.target.value))}
+              className="w-20 sm:w-28 accent-[#DB2777]"
             />
-          </label>
-        </div>
-      )}
-
-      {activeTool === "text" && !selectedText && (
-        <div className="booth-editor-settings">
-          <button type="button" className="booth-primary-action w-full" onClick={addCenteredText}>
-            <Type className="h-4 w-4" />
-            Tambah Teks
+          </div>
+          <button
+            type="button"
+            title="Tutup"
+            onClick={() => selectEditorTool("move")}
+            className="h-8 w-8 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 flex items-center justify-center shrink-0 ml-auto"
+          >
+            <X className="h-4 w-4" />
           </button>
-          <p className="booth-muted text-xs">Atau ketuk di kanvas untuk menempatkan teks.</p>
-          <label className="booth-editor-field">
-            Tulisan
-            <textarea
-              rows={2}
-              maxLength={60}
-              value={textDraft}
-              onChange={(event) => setTextDraft(event.target.value)}
-            />
-          </label>
         </div>
       )}
 
-      {selectedText && (
-        <div className="booth-editor-settings">
-          <div className="booth-editor-row">
-            <strong>Edit teks</strong>
-            <button type="button" onClick={deleteSelectedObject}>
-              <Trash2 className="h-4 w-4" />
-              Hapus
-            </button>
-          </div>
-          <label className="booth-editor-field">
-            Tulisan
-            <textarea
-              ref={textInputRef}
-              rows={2}
-              maxLength={60}
-              value={selectedText.text ?? ""}
-              onChange={(event) => updateSelectedObject({ text: event.target.value })}
-            />
-          </label>
-          <div className="grid grid-cols-2 gap-2">
-            <label className="booth-editor-field">
-              Font
-              <select
-                value={selectedText.fontFamily ?? FONT_OPTIONS[0]}
-                onChange={(event) => updateSelectedObject({ fontFamily: event.target.value })}
-              >
-                {FONT_OPTIONS.map((font) => <option key={font} value={font}>{font}</option>)}
-              </select>
-            </label>
-            <label className="booth-editor-label">
-              Warna
-              <input
-                type="color"
-                value={selectedText.color ?? "#382c30"}
-                onChange={(event) => updateSelectedObject({ color: event.target.value })}
-              />
-            </label>
-          </div>
-          <div className="booth-editor-swatches">
-            {TEXT_COLOR_OPTIONS.map((color) => (
-              <button
-                key={color}
-                type="button"
-                aria-label={`Pilih warna teks ${color}`}
-                aria-pressed={selectedText.color === color}
-                onClick={() => updateSelectedObject({ color })}
-                style={{ backgroundColor: color }}
-              />
-            ))}
-          </div>
-          <label className="booth-editor-range">
-            Ukuran teks {selectedText.fontSize ?? textSize}px
+      {activeTool === "eraser" && (
+        <div className="booth-tool-topbar">
+          <span className="text-xs font-bold text-[var(--booth-ink)] flex items-center gap-1.5 shrink-0">
+            <Eraser className="h-4 w-4 text-[#DB2777]" />
+            Penghapus
+          </span>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="text-[11px] font-semibold text-gray-500 whitespace-nowrap">{brushSize}px</span>
             <input
               type="range"
-              min="24"
-              max="160"
-              value={selectedText.fontSize ?? textSize}
-              onChange={(event) => {
-                const fontSize = Number(event.target.value);
-                updateSelectedObject({ fontSize, height: fontSize * 1.4 });
-              }}
+              min="3"
+              max="80"
+              value={brushSize}
+              onChange={(e) => setBrushSize(Number(e.target.value))}
+              className="w-24 sm:w-36 accent-[#DB2777]"
             />
-          </label>
-          {layerControls}
-          <label className="booth-editor-range">
-            Putar {selectedText.rotation}°
-            <input
-              type="range"
-              min="-180"
-              max="180"
-              value={selectedText.rotation}
-              onChange={(event) => updateSelectedObject({ rotation: Number(event.target.value) })}
-            />
-          </label>
+          </div>
+          <button
+            type="button"
+            title="Tutup"
+            onClick={() => selectEditorTool("move")}
+            className="h-8 w-8 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 flex items-center justify-center shrink-0 ml-auto"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
       )}
 
       {activeTool === "sticker" && (
-        <div className="booth-sticker-picker">
-          {STICKER_OPTIONS.map((sticker) => (
-            <button
-              key={sticker}
-              type="button"
-              aria-label={`Pilih stiker ${sticker}`}
-              aria-pressed={activeSticker === sticker}
-              onClick={() => {
-                setActiveSticker(sticker);
-                setActiveTool("sticker");
-              }}
-            >
-              {sticker}
-            </button>
-          ))}
-          <input
-            ref={stickerPngInputRef}
-            type="file"
-            accept="image/png"
-            className="hidden"
-            onChange={(event) => {
-              void onPickStickerPng(event.target.files?.[0]);
-              event.currentTarget.value = "";
-            }}
-          />
+        <div className="booth-tool-topbar">
+          <span className="text-xs font-bold text-[var(--booth-ink)] flex items-center gap-1 shrink-0 mr-1">
+            <Sticker className="h-4 w-4 text-[#DB2777]" />
+            Stiker:
+          </span>
+          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none">
+            {STICKER_OPTIONS.map((sticker) => (
+              <button
+                key={sticker}
+                type="button"
+                aria-label={`Pilih stiker ${sticker}`}
+                onClick={() => {
+                  setActiveSticker(sticker);
+                  setActiveTool("sticker");
+                }}
+                className={`w-7 h-7 rounded-lg text-base flex items-center justify-center hover:bg-pink-50 transition-colors shrink-0 ${activeSticker === sticker ? "bg-pink-100 ring-1 ring-[#DB2777]" : ""}`}
+              >
+                {sticker}
+              </button>
+            ))}
+          </div>
           <button
             type="button"
-            className="booth-upload-sticker"
-            aria-label="Unggah stiker PNG"
             title="Unggah stiker PNG"
             onClick={() => stickerPngInputRef.current?.click()}
+            className="h-8 px-2.5 rounded-lg border border-[var(--booth-border)] bg-white hover:bg-pink-50 text-gray-700 text-xs font-semibold flex items-center gap-1 shrink-0"
           >
-            <Upload className="h-5 w-5" />
+            <Upload className="h-3.5 w-3.5 text-[#DB2777]" />
+            <span className="hidden sm:inline">PNG</span>
+          </button>
+          <button
+            type="button"
+            title="Tutup"
+            onClick={() => selectEditorTool("move")}
+            className="h-8 w-8 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 flex items-center justify-center shrink-0 ml-auto"
+          >
+            <X className="h-4 w-4" />
           </button>
         </div>
       )}
 
       {selectedObject && selectedObject.kind !== "text" && (
-        <div className="booth-editor-settings">
-          <div className="booth-editor-row">
-            <strong>Atur objek</strong>
-            <button type="button" onClick={deleteSelectedObject}>
-              <Trash2 className="h-4 w-4" />
-              Hapus
+        <div className="booth-tool-topbar">
+          <span className="text-xs font-bold text-[var(--booth-ink)] shrink-0">
+            Objek terpilih
+          </span>
+          <div className="flex items-center gap-0.5 shrink-0 border-l border-gray-200 pl-1.5">
+            <button
+              type="button"
+              title="Pindah ke depan"
+              disabled={!canMoveLayerUp}
+              onClick={() => applyObjectLayer(moveObjectUp)}
+              className="p-1 rounded text-gray-500 hover:text-black disabled:opacity-30"
+            >
+              <ChevronUp className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              title="Pindah ke belakang"
+              disabled={!canMoveLayerDown}
+              onClick={() => applyObjectLayer(moveObjectDown)}
+              className="p-1 rounded text-gray-500 hover:text-black disabled:opacity-30"
+            >
+              <ChevronDown className="h-4 w-4" />
             </button>
           </div>
-          {layerControls}
-          <label className="booth-editor-range">
-            Putar objek {selectedObject.rotation}°
-            <input
-              type="range"
-              min="-180"
-              max="180"
-              value={selectedObject.rotation}
-              onChange={(event) => updateSelectedObject({ rotation: Number(event.target.value) })}
-            />
-          </label>
-          <p className="booth-muted text-xs">Seret objek untuk memindahkan; tarik titik sudut untuk mengubah ukuran.</p>
+          <button
+            type="button"
+            title="Hapus objek"
+            onClick={deleteSelectedObject}
+            className="h-8 w-8 rounded-lg border border-red-200 text-red-500 hover:bg-red-50 hover:text-red-700 flex items-center justify-center shrink-0"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            title="Selesai"
+            onClick={() => updateDocument(activeSide, (doc) => ({ ...doc, selectedObjectId: null }), false)}
+            className="h-8 w-8 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 flex items-center justify-center shrink-0 ml-auto"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
       )}
     </>
@@ -1729,9 +2023,56 @@ export default function Keychain() {
             </div>
 
             <div className="booth-canvas-workspace">
-            <div
-              className="booth-stage flex flex-1 flex-col overflow-hidden rounded-2xl p-3 sm:p-4"
-            >
+              <div className="booth-tool-dock">
+                <div className="booth-editor-rail" role="toolbar" aria-label="Alat edit foto">
+                  {([
+                    ["hand", "Hand", Hand],
+                    ["move", "Move", Move],
+                    ["brush", "Brush", Brush],
+                    ["eraser", "Penghapus", Eraser],
+                    ["text", "Teks", Type],
+                    ["sticker", "Stiker", Sticker],
+                  ] as const).map(([tool, label, Icon]) => (
+                    <button
+                      key={tool}
+                      type="button"
+                      aria-label={label}
+                      aria-pressed={activeTool === tool}
+                      onClick={() => selectEditorTool(tool)}
+                      className="booth-editor-tool"
+                      title={label}
+                    >
+                      <Icon className="h-4 w-4" />
+                    </button>
+                  ))}
+                  <span className="booth-rail-divider" aria-hidden="true" />
+                  <button
+                    type="button"
+                    title="Urungkan perubahan"
+                    aria-label="Urungkan perubahan"
+                    disabled={!history[activeSide].past.length}
+                    onClick={() => undo(activeSide)}
+                    className="booth-editor-tool disabled:opacity-40"
+                  >
+                    <Undo2 className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    title="Ulangi perubahan"
+                    aria-label="Ulangi perubahan"
+                    disabled={!history[activeSide].future.length}
+                    onClick={() => redo(activeSide)}
+                    className="booth-editor-tool disabled:opacity-40"
+                  >
+                    <Redo2 className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+
+              <div
+                className="booth-stage flex flex-1 flex-col overflow-hidden rounded-2xl p-3 sm:p-4"
+              >
+                {toolTopBar}
               <div ref={canvasStageRef} className="booth-stage-canvas">
               <div
                 ref={canvasWrapRef}
@@ -1766,11 +2107,13 @@ export default function Keychain() {
                 />
                 <canvas ref={liveDrawingRef} className="booth-live-drawing" aria-hidden="true" />
                 {currentSlots.map((slot, index) => {
-                  const position = {
+                  const position: React.CSSProperties = {
                     left: `${(slot.x / sideTemplate.canvasSize.width) * 100}%`,
                     top: `${(slot.y / sideTemplate.canvasSize.height) * 100}%`,
                     width: `${(slot.width / sideTemplate.canvasSize.width) * 100}%`,
                     height: `${(slot.height / sideTemplate.canvasSize.height) * 100}%`,
+                    transform: slot.rotation ? `rotate(${slot.rotation}deg)` : undefined,
+                    transformOrigin: "center center",
                   };
 
                   if (sidePhotos[index]) {
@@ -1913,89 +2256,6 @@ export default function Keychain() {
                 </span>
               </div>
             </div>
-              <div className={`booth-tool-dock${toolDockCollapsed ? " is-collapsed" : ""}`}>
-                <div className="booth-editor-rail" role="toolbar" aria-label="Alat edit foto">
-                  {([
-                    ["hand", "Hand", Hand],
-                    ["move", "Move", Move],
-                    ["brush", "Brush", Brush],
-                    ["eraser", "Penghapus", Eraser],
-                    ["text", "Teks", Type],
-                    ["sticker", "Stiker", Sticker],
-                  ] as const).map(([tool, label, Icon]) => (
-                    <button
-                      key={tool}
-                      type="button"
-                      aria-label={label}
-                      aria-pressed={activeTool === tool}
-                      onClick={() => selectEditorTool(tool)}
-                      className="booth-editor-tool"
-                      title={label}
-                    >
-                      <Icon className="h-5 w-5" />
-                    </button>
-                  ))}
-                  <span className="booth-rail-divider" aria-hidden="true" />
-                  <button
-                    type="button"
-                    title="Urungkan perubahan"
-                    aria-label="Urungkan perubahan"
-                    disabled={!history[activeSide].past.length}
-                    onClick={() => undo(activeSide)}
-                    className="booth-editor-tool disabled:opacity-40"
-                  >
-                    <Undo2 className="h-5 w-5" />
-                  </button>
-                  <button
-                    type="button"
-                    title="Ulangi perubahan"
-                    aria-label="Ulangi perubahan"
-                    disabled={!history[activeSide].future.length}
-                    onClick={() => redo(activeSide)}
-                    className="booth-editor-tool disabled:opacity-40"
-                  >
-                    <Redo2 className="h-5 w-5" />
-                  </button>
-                </div>
-
-                {showToolPopover && !toolDockCollapsed && (
-                  <aside className="booth-tool-popover" aria-label="Pengaturan alat aktif">
-                    <div className="booth-tool-popover-header">
-                      <h3 className="booth-tool-popover-title">
-                        {selectedText ? "Edit teks" : activeTool === "move" ? "Objek terpilih" : {
-                          hand: "Hand",
-                          move: "Move",
-                          brush: "Brush",
-                          eraser: "Penghapus",
-                          text: "Teks",
-                          sticker: "Stiker",
-                        }[activeTool]}
-                      </h3>
-                      <button
-                        type="button"
-                        className="booth-tool-dock-toggle"
-                        aria-label="Sembunyikan panel alat"
-                        title="Sembunyikan panel alat"
-                        onClick={() => setToolDockCollapsed(true)}
-                      >
-                        <ChevronDown className="h-4 w-4" />
-                      </button>
-                    </div>
-                    {toolSettings}
-                  </aside>
-                )}
-                {showToolPopover && toolDockCollapsed && (
-                  <button
-                    type="button"
-                    className="booth-tool-dock-toggle is-expand"
-                    aria-label="Tampilkan panel alat"
-                    onClick={() => setToolDockCollapsed(false)}
-                  >
-                    <ChevronUp className="h-4 w-4" />
-                    Buka pengaturan
-                  </button>
-                )}
-              </div>
             </div>
             {renderError && (
               <p className="mt-2 rounded-xl bg-red-50 px-3 py-2 text-xs font-semibold text-red-700" role="alert">

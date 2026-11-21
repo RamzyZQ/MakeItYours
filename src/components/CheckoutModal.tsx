@@ -144,7 +144,7 @@ export default function CheckoutModal({
         tabIndex={-1}
         className={`w-full my-auto border-2 border-[#FCE7F3] bg-white shadow-2xl overflow-y-auto ${
           compactPreviewOnly
-            ? "max-w-[340px] rounded-2xl p-4 max-h-[min(88vh,560px)]"
+            ? "max-w-[380px] md:max-w-2xl lg:max-w-3xl rounded-3xl p-5 md:p-7 max-h-[min(92vh,760px)]"
             : "max-w-md rounded-3xl p-6 max-h-[min(92vh,720px)]"
         }`}
       >

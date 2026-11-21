@@ -7,6 +7,7 @@ export interface PhotoSlot {
   y: number;
   width: number;
   height: number;
+  rotation?: number;
 }
 
 export interface TextSlot {
@@ -39,7 +40,7 @@ const canvasSize = { width: 690, height: 1620 };
 const backCanvasSize = { width: 1620, height: 690 };
 
 function photoSlots(
-  bounds: Array<{ x: number; y: number; width: number; height: number }>,
+  bounds: Array<{ x: number; y: number; width: number; height: number; rotation?: number }>,
 ): PhotoSlot[] {
   return bounds.map((slot, index) => ({ id: `photo-${index + 1}`, ...slot }));
 }
@@ -150,7 +151,7 @@ export const PHOTOBOOTH_TEMPLATES: PhotoBoothTemplate[] = [
       { x: 125, y: 131, width: 451, height: 630 },
       { x: 125, y: 788, width: 451, height: 629 },
     ]),
-    backPhotoSlots: photoSlots([{ x: 1127, y: 117, width: 369, height: 364 }]),
+    backPhotoSlots: photoSlots([{ x: 1144, y: 119, width: 334, height: 366, rotation: 6.85 }]),
     textSlots: [],
     defaultFilter: "none",
   },

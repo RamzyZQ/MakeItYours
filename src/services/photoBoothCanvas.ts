@@ -96,12 +96,20 @@ function drawPhoto(
     Math.min(adjustment.panY, Math.max(0, (rotatedHeight - slot.height) / 2)),
   );
   context.save();
+  const centerX = slot.x + slot.width / 2;
+  const centerY = slot.y + slot.height / 2;
+  context.translate(centerX, centerY);
+  if (slot.rotation) {
+    context.rotate((slot.rotation * Math.PI) / 180);
+  }
   context.beginPath();
-  context.rect(slot.x, slot.y, slot.width, slot.height);
+  context.rect(-slot.width / 2, -slot.height / 2, slot.width, slot.height);
   context.clip();
   context.filter = filter;
-  context.translate(slot.x + slot.width / 2 + panX, slot.y + slot.height / 2 + panY);
-  context.rotate(rotation);
+  context.translate(panX, panY);
+  if (rotation) {
+    context.rotate(rotation);
+  }
   context.scale(adjustment.flipX ? -1 : 1, adjustment.flipY ? -1 : 1);
   context.drawImage(
     image,
@@ -131,6 +139,32 @@ function drawStroke(context: CanvasRenderingContext2D, stroke: PhotoBoothDocumen
   context.restore();
 }
 
+export function getFontContextString(fontFamily: string | undefined, fontSize: number): string {
+  const family = fontFamily ?? "Quicksand";
+  if (family === "Cherry Bomb One") {
+    return `600 ${fontSize}px "Cherry Bomb One", cursive, sans-serif`;
+  }
+  if (family === "Cormorant Garamond") {
+    return `600 ${fontSize}px "Cormorant Garamond", Georgia, serif`;
+  }
+  if (family === "Times New Roman MT") {
+    return `600 ${fontSize}px "Times New Roman MT", "Times New Roman", Times, serif`;
+  }
+  if (family === "Copperplate Gothic 29 BC") {
+    return `600 ${fontSize}px "Copperplate Gothic 29 BC", "Copperplate", fantasy, sans-serif`;
+  }
+  if (family === "Frankfurter Normal") {
+    return `600 ${fontSize}px "Frankfurter Normal", "Frankfurter", sans-serif`;
+  }
+  if (family === "Roca One") {
+    return `600 ${fontSize}px "Roca One", Georgia, serif`;
+  }
+  if (family === "Perandory") {
+    return `600 ${fontSize}px "Perandory", cursive, serif`;
+  }
+  return `600 ${fontSize}px "${family}", sans-serif`;
+}
+
 function drawObject(
   context: CanvasRenderingContext2D,
   object: EditorObject,
@@ -144,7 +178,7 @@ function drawObject(
   if (object.kind === "text") {
     const fontSize = object.fontSize ?? 64;
     context.fillStyle = object.color ?? "#382c30";
-    context.font = `600 ${fontSize}px "${object.fontFamily ?? "Quicksand"}", sans-serif`;
+    context.font = getFontContextString(object.fontFamily, fontSize);
     context.textAlign = "center";
     context.textBaseline = "middle";
     const lines = (object.text ?? "").split("\n");
@@ -162,16 +196,45 @@ function drawObject(
   }
 
   if (selected) {
-    context.strokeStyle = "#b83e68";
-    context.lineWidth = 3;
-    context.setLineDash([10, 7]);
-    context.strokeRect(-object.width / 2, -object.height / 2, object.width, object.height);
-    context.setLineDash([]);
-    context.fillStyle = "#ffffff";
+    // 1. Stem line up to Rotate handle
+    const rotateStemLength = 34;
+    const rotateHandleY = -object.height / 2 - rotateStemLength;
     context.beginPath();
-    context.arc(object.width / 2, object.height / 2, 10, 0, Math.PI * 2);
+    context.moveTo(0, -object.height / 2);
+    context.lineTo(0, rotateHandleY);
+    context.strokeStyle = "#DB2777";
+    context.lineWidth = 2;
+    context.stroke();
+
+    // 2. Rotate Handle Circle & Icon (↻)
+    context.fillStyle = "#FFFFFF";
+    context.strokeStyle = "#DB2777";
+    context.lineWidth = 2.5;
+    context.beginPath();
+    context.arc(0, rotateHandleY, 15, 0, Math.PI * 2);
     context.fill();
     context.stroke();
+    context.fillStyle = "#DB2777";
+    context.font = "bold 16px sans-serif";
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.fillText("↻", 0, rotateHandleY);
+
+    // 3. Resize Handle at bottom-right corner (⤡)
+    const resizeHandleX = object.width / 2;
+    const resizeHandleY = object.height / 2;
+    context.fillStyle = "#FFFFFF";
+    context.strokeStyle = "#DB2777";
+    context.lineWidth = 2.5;
+    context.beginPath();
+    context.arc(resizeHandleX, resizeHandleY, 15, 0, Math.PI * 2);
+    context.fill();
+    context.stroke();
+    context.fillStyle = "#DB2777";
+    context.font = "bold 15px sans-serif";
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.fillText("⤡", resizeHandleX, resizeHandleY);
   }
   context.restore();
 }

@@ -507,6 +507,9 @@
 .booth-canvas-workspace {
   position: relative;
   display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 10px;
   min-height: 0;
   min-width: 0;
   width: 100%;
@@ -514,91 +517,61 @@
 }
 
 .booth-tool-dock {
-  position: absolute;
+  position: relative;
   z-index: 7;
-  top: 10px;
-  left: 10px;
   display: flex;
-  max-height: calc(100% - 20px);
+  flex-direction: column;
   align-items: flex-start;
-  gap: 10px;
-  pointer-events: none;
-}
-
-.booth-tool-dock > * {
+  gap: 8px;
+  flex-shrink: 0;
   pointer-events: auto;
 }
 
 .booth-editor-rail {
   display: flex;
-  width: 56px;
+  width: 44px;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  padding: 8px 4px;
+  gap: 6px;
+  padding: 6px 4px;
   border: 1px solid var(--booth-border);
-  border-radius: 20px;
+  border-radius: 16px;
   background: var(--booth-surface);
-  box-shadow: 0 9px 24px rgb(52 32 40 / 13%);
+  box-shadow: 0 4px 16px rgb(52 32 40 / 8%);
 }
 
-.booth-tool-popover {
-  display: grid;
-  width: 224px;
-  max-height: calc(100% - 20px);
-  gap: 10px;
-  overflow: auto;
-  border: 1px solid var(--booth-border);
-  border-radius: 18px;
-  background: var(--booth-surface);
-  padding: 12px;
-  box-shadow: 0 12px 30px rgb(52 32 40 / 14%);
-}
-
-.booth-tool-popover-header {
+.booth-tool-topbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
-}
-
-.booth-tool-popover-title {
-  color: var(--booth-ink);
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.booth-tool-dock-toggle {
-  display: inline-flex;
-  min-height: 38px;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
+  min-height: 44px;
+  padding: 6px 12px;
+  margin-bottom: 8px;
   border: 1px solid var(--booth-border);
-  border-radius: 999px;
-  background: var(--booth-surface);
-  padding: 0 12px;
-  color: var(--booth-muted);
-  font-size: 11px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 140ms ease;
-  user-select: none;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 4px 14px rgb(52 32 40 / 7%);
+  backdrop-filter: blur(8px);
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  flex-shrink: 0;
+  animation: boothTopbarFadeIn 140ms ease-out;
 }
 
-.booth-tool-dock-toggle:hover {
-  border-color: var(--booth-accent);
-  color: var(--booth-accent);
-  background: var(--booth-accent-soft);
+.booth-tool-topbar::-webkit-scrollbar {
+  display: none;
 }
 
-.booth-tool-dock-toggle.is-expand {
-  align-self: center;
-  margin-top: 4px;
-  box-shadow: 0 4px 12px rgb(52 32 40 / 12%);
-  border-color: var(--booth-accent);
-  color: var(--booth-accent);
-  background: var(--booth-surface);
+@keyframes boothTopbarFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .booth-layer-actions {
@@ -913,16 +886,17 @@
 
 .booth-editor-tool {
   display: flex;
-  width: 44px;
-  min-width: 44px;
-  min-height: 44px;
+  width: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  height: 36px;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--booth-border);
-  border-radius: 14px;
-  background: var(--booth-surface);
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
   color: var(--booth-muted);
-  transition: border-color 140ms ease, background-color 140ms ease, color 140ms ease;
+  transition: all 140ms ease;
 }
 
 .booth-editor-tool[aria-pressed="true"] {
@@ -932,8 +906,9 @@
 }
 
 .booth-editor-tool:hover:not(:disabled) {
-  border-color: var(--booth-accent);
-  color: var(--booth-accent);
+  border-color: var(--booth-border);
+  background: #ffffff;
+  color: var(--booth-ink);
 }
 
 .booth-editor-settings {
@@ -1445,6 +1420,10 @@
     gap: 8px;
   }
 
+  .booth-canvas-workspace {
+    flex-direction: column;
+  }
+
   .booth-stage {
     min-height: 280px;
     padding: 12px 8px 8px;
@@ -1455,6 +1434,7 @@
   }
 
   .booth-tool-dock {
+    order: 2;
     position: relative;
     top: auto;
     left: auto;
